@@ -1,0 +1,72 @@
+name: Rakenna ja julkaise invapaikka-aineisto
+
+on:
+  schedule:
+    # Maanantaisin klo 03:00 UTC. Lähteet päivittyvät harvakseltaan
+    # (Digiroad 5–6 kertaa vuodessa), joten viikoittainen ajo riittää hyvin.
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+  push:
+    paths:
+      - "pipeline/**"
+      - "tests/**"
+      - ".github/workflows/build-data.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Yksi ajo kerrallaan: rinnakkaiset julkaisut ylikirjoittaisivat toisensa.
+concurrency:
+  group: build-data
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Pipeline käyttää pelkkää standardikirjastoa, joten asennettavaa ei ole.
+      - name: Aja testit
+        run: python -m unittest discover -s tests -t .
+
+      - name: Rakenna aineisto
+        run: python -m pipeline.build --output-dir data --verbose
+
+      - name: Tarkista ettei aineisto romahtanut
+        # Suojaa tilanteelta, jossa rajapinta muuttuu ja pipeline tuottaa
+        # muodollisesti kelvollisen mutta lähes tyhjän tiedoston. Silloin on
+        # parempi jättää edellinen julkaisu voimaan kuin korvata se tyhjällä.
+        run: |
+          count=$(python -c "import json;print(json.load(open('data/invapaikat.geojson'))['metadata']['count'])")
+          echo "Kohteita: $count"
+          if [ "$count" -lt 1500 ]; then
+            echo "::error::Vain $count kohdetta (odotettu vähintään 1500) — ei julkaista."
+            exit 1
+          fi
+
+      - name: Pakkaa jakelua varten
+        run: |
+          cp docs/tietolahteet.md data/ 2>/dev/null || true
+          gzip -9 -k data/invapaikat.geojson
+          ls -lh data/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: data
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
