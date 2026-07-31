@@ -9,16 +9,26 @@ import 'package:latlong2/latlong.dart';
 import '../config.dart';
 import '../data/parking_spot.dart';
 import '../data/spot_database.dart';
+import '../services/geocoder.dart';
 import '../services/map_key_store.dart';
 import 'api_key_screen.dart';
+import 'map_search_bar.dart';
 import 'spot_details_sheet.dart';
 import 'spot_marker.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key, required this.database, required this.keyStore});
+  const MapScreen({
+    super.key,
+    required this.database,
+    required this.keyStore,
+    this.geocoder,
+  });
 
   final SpotRepository database;
   final MapKeyStore keyStore;
+
+  /// Testeissä korvattavissa; tuotannossa luodaan oletustoteutus.
+  final MmlGeocoder? geocoder;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -26,6 +36,8 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
+  late final MmlGeocoder _geocoder = widget.geocoder ?? MmlGeocoder();
+  late final bool _ownsGeocoder = widget.geocoder == null;
 
   List<ParkingSpot> _spots = const [];
   final Map<Key, ParkingSpot> _spotsByKey = {};
@@ -37,8 +49,21 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _debounce?.cancel();
+    if (_ownsGeocoder) _geocoder.dispose();
     _mapController.dispose();
     super.dispose();
+  }
+
+  /// Siirrä kartta hakutuloksen kohdalle. Zoom 16 näyttää korttelin, mikä
+  /// on oikea mittakaava pysäköintipaikan etsimiseen.
+  void _goToPlace(GeocodeResult place) {
+    _mapController.move(LatLng(place.lat, place.lon), 16);
+  }
+
+  Future<void> _goToSpot(ParkingSpot spot) async {
+    _mapController.move(spot.position, 17);
+    await _loadVisible(_mapController.camera.visibleBounds);
+    if (mounted) await SpotDetailsSheet.show(context, spot);
   }
 
   /// Kartan liikkuessa haetaan vain näkyvän ruudun kohteet. Viive estää
@@ -193,13 +218,29 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ],
               ),
-              if (!widget.keyStore.hasKey)
-                Positioned(
-                  top: 12,
-                  left: 12,
-                  right: 12,
-                  child: _MissingKeyBanner(onTap: _openKeyScreen),
+              Positioned(
+                top: 12,
+                left: 12,
+                right: 12,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    MapSearchBar(
+                      repository: widget.database,
+                      geocoder: _geocoder,
+                      apiKey: widget.keyStore.key,
+                      onPlaceSelected: _goToPlace,
+                      onSpotSelected: _goToSpot,
+                      onOpenSettings: _openKeyScreen,
+                    ),
+                    if (!widget.keyStore.hasKey)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: _MissingKeyBanner(onTap: _openKeyScreen),
+                      ),
+                  ],
                 ),
+              ),
               const Positioned(left: 12, bottom: 12, child: MapLegend()),
               Positioned(
                 right: 12,
@@ -236,8 +277,8 @@ class _MissingKeyBanner extends StatelessWidget {
         leading: const Icon(Icons.map_outlined),
         title: const Text('Taustakartta puuttuu'),
         subtitle: const Text(
-          'Lisää maksuton Maanmittauslaitoksen API-avain nähdäksesi kartan. '
-          'Invapaikat ja navigointi toimivat jo nyt.',
+          'Lisää maksuton Maanmittauslaitoksen API-avain nähdäksesi kartan ja '
+          'ottaaksesi osoitehaun käyttöön. Invapaikat ja navigointi toimivat jo nyt.',
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: onTap,

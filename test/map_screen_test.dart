@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:leparkki/config.dart';
+import 'package:leparkki/services/geocoder.dart';
 import 'package:leparkki/services/map_key_store.dart';
 import 'package:leparkki/ui/map_screen.dart';
 import 'package:leparkki/ui/spot_marker.dart';
@@ -10,10 +11,17 @@ import 'fakes.dart';
 Future<void> pumpMap(
   WidgetTester tester,
   FakeSpotRepository repo,
-  MapKeyStore store,
-) async {
+  MapKeyStore store, {
+  MmlGeocoder? geocoder,
+}) async {
   await tester.pumpWidget(
-    MaterialApp(home: MapScreen(database: repo, keyStore: store)),
+    MaterialApp(
+      home: MapScreen(
+        database: repo,
+        keyStore: store,
+        geocoder: geocoder ?? fakeGeocoder(),
+      ),
+    ),
   );
   // onMapReady + viive + asynkroninen haku.
   await tester.pump();
@@ -54,6 +62,41 @@ void main() {
     expect(find.text('Navigoi tähän'), findsOneWidget);
   });
 
+  testWidgets('osoitehaun valinta siirtää kartan ja hakee uuden alueen kohteet',
+      (tester) async {
+    // Helsinki on kaukana oletusnäkymästä (Tampere), joten siirtymän näkee
+    // haetuista rajoista.
+    const helsinkiLat = 60.1699;
+    const helsinkiLon = 24.9384;
+
+    final repo = FakeSpotRepository([spotAt(helsinkiLat, helsinkiLon)]);
+    await pumpMap(
+      tester,
+      repo,
+      await fakeKeyStore(key: 'avain'),
+      geocoder: fakeGeocoder(results: [
+        (label: 'Rautatientori, Helsinki', lat: helsinkiLat, lon: helsinkiLon),
+      ]),
+    );
+
+    final boundsBefore = repo.requestedBounds.length;
+
+    await tester.enterText(find.byType(TextField), 'Rautatientori');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rautatientori, Helsinki'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(repo.requestedBounds.length, greaterThan(boundsBefore),
+        reason: 'kartan siirron pitää laukaista uusi haku');
+    final latest = repo.requestedBounds.last;
+    expect(latest[0], lessThan(helsinkiLat));
+    expect(latest[1], greaterThan(helsinkiLat));
+    expect(latest[2], lessThan(helsinkiLon));
+    expect(latest[3], greaterThan(helsinkiLon));
+  });
+
   testWidgets('ilman API-avainta näytetään huomautus', (tester) async {
     await pumpMap(tester, FakeSpotRepository([]), await fakeKeyStore());
     expect(find.text('Taustakartta puuttuu'), findsOneWidget);
@@ -68,8 +111,9 @@ void main() {
     expect(find.text('Taustakartta puuttuu'), findsNothing);
   });
 
-  testWidgets('selite näkyy kartalla', (tester) async {
+  testWidgets('hakupalkki ja selite näkyvät kartalla', (tester) async {
     await pumpMap(tester, FakeSpotRepository([]), await fakeKeyStore());
+    expect(find.byType(TextField), findsOneWidget);
     expect(find.byType(MapLegend), findsOneWidget);
   });
 }

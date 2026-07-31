@@ -1,6 +1,11 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:leparkki/config.dart';
 import 'package:leparkki/data/parking_spot.dart';
 import 'package:leparkki/data/spot_database.dart';
+import 'package:leparkki/services/geocoder.dart';
 import 'package:leparkki/services/map_key_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -63,4 +68,30 @@ Future<MapKeyStore> fakeKeyStore({String? key}) async {
     key == null ? <String, Object>{} : <String, Object>{'mml_api_key': key},
   );
   return MapKeyStore.load();
+}
+
+/// Geokoodaaja, joka palauttaa annetut osumat verkkoon menemättä.
+MmlGeocoder fakeGeocoder({
+  List<({String label, double lat, double lon})> results = const [],
+  int status = 200,
+}) {
+  final body = jsonEncode({
+    'type': 'FeatureCollection',
+    'features': [
+      for (final r in results)
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'Point',
+            'coordinates': [r.lon, r.lat],
+          },
+          'properties': {'label': r.label},
+        },
+    ],
+  });
+  return MmlGeocoder(
+    client: MockClient(
+      (_) async => http.Response.bytes(utf8.encode(body), status),
+    ),
+  );
 }
