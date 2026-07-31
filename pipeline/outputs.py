@@ -65,6 +65,31 @@ def write_geojson(spots: list[ParkingSpot], path: Path, *, generated_at: str) ->
     log.info("Kirjoitettu %s (%d kohdetta, %.1f kt)", path, len(spots), path.stat().st_size / 1024)
 
 
+def write_manifest(
+    spots: list[ParkingSpot], path: Path, *, generated_at: str, files: dict[str, Path]
+) -> None:
+    """Kirjoita pieni manifesti, jonka sovellus hakee version tarkistamiseen.
+
+    Ilman tätä sovelluksen pitäisi ladata koko aineisto vain nähdäkseen, onko
+    se muuttunut. Manifesti on muutama sata tavua.
+    """
+    payload = {
+        "generated_at": generated_at,
+        "schema_version": SCHEMA_VERSION,
+        "count": len(spots),
+        "license": LICENSE,
+        "attribution": ATTRIBUTION,
+        "files": {
+            name: {"name": file.name, "bytes": file.stat().st_size}
+            for name, file in files.items()
+            if file.exists()
+        },
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    log.info("Kirjoitettu %s", path)
+
+
 def _rtree_available(conn: sqlite3.Connection) -> bool:
     try:
         conn.execute("CREATE VIRTUAL TABLE _rtree_probe USING rtree(id, minx, maxx)")

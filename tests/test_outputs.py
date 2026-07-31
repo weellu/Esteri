@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from pipeline.model import PRECISION_AREA, PRECISION_SPACE, ParkingSpot
-from pipeline.outputs import write_geojson, write_sqlite
+from pipeline.outputs import write_geojson, write_manifest, write_sqlite
 
 GENERATED_AT = "2026-07-31T12:00:00+00:00"
 
@@ -134,6 +134,72 @@ class TestSqlite(unittest.TestCase):
             count = conn.execute("SELECT COUNT(*) FROM spots").fetchone()[0]
             conn.close()
         self.assertEqual(count, 1)
+
+
+class TestManifest(unittest.TestCase):
+    """Manifesti on se, jonka sovellus hakee tarkistaakseen onko uutta dataa.
+
+    Sen kentät ovat sopimus sovelluksen kanssa: jos jokin puuttuu tai
+    muuttuu tyypiltään, sovellus hylkää päivityksen kokonaan.
+    """
+
+    def _write(self, tmp, spots):
+        geojson = tmp / "invapaikat.geojson"
+        sqlite = tmp / "invapaikat.sqlite"
+        write_geojson(spots, geojson, generated_at=GENERATED_AT)
+        write_sqlite(spots, sqlite, generated_at=GENERATED_AT)
+        manifest = tmp / "manifest.json"
+        write_manifest(
+            spots,
+            manifest,
+            generated_at=GENERATED_AT,
+            files={"geojson": geojson, "sqlite": sqlite},
+        )
+        return json.loads(manifest.read_text(encoding="utf-8"))
+
+    def test_contains_fields_the_app_requires(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = self._write(Path(tmp), sample_spots())
+        # Sovellus vaatii nämä kolme oikean tyyppisinä, muuten se hylkää
+        # päivityksen. Erityisesti count on luku, ei merkkijono.
+        self.assertIsInstance(payload["generated_at"], str)
+        self.assertIsInstance(payload["schema_version"], int)
+        self.assertIsInstance(payload["count"], int)
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual(payload["generated_at"], GENERATED_AT)
+
+    def test_count_matches_sqlite_row_count(self):
+        # Sovellus vertaa manifestin lukua ladatun tiedoston riveihin ja
+        # hylkää päivityksen jos ne eivät täsmää.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            payload = self._write(tmp_path, sample_spots())
+            conn = sqlite3.connect(tmp_path / "invapaikat.sqlite")
+            rows = conn.execute("SELECT COUNT(*) FROM spots").fetchone()[0]
+            conn.close()
+        self.assertEqual(payload["count"], rows)
+
+    def test_carries_license_and_attribution(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = self._write(Path(tmp), sample_spots())
+        self.assertEqual(payload["license"], "ODbL-1.0")
+        self.assertIn("OpenStreetMap", payload["attribution"])
+
+    def test_lists_published_files_with_sizes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = self._write(Path(tmp), sample_spots())
+        self.assertEqual(payload["files"]["sqlite"]["name"], "invapaikat.sqlite")
+        self.assertGreater(payload["files"]["sqlite"]["bytes"], 0)
+        self.assertEqual(payload["files"]["geojson"]["name"], "invapaikat.geojson")
+
+    def test_manifest_is_small_enough_to_poll(self):
+        # Manifestin koko ratkaisee, kannattaako sitä hakea joka
+        # käynnistyksellä. Aineisto itse on satoja kilotavuja.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            self._write(tmp_path, sample_spots())
+            size = (tmp_path / "manifest.json").stat().st_size
+        self.assertLess(size, 2048)
 
 
 if __name__ == "__main__":

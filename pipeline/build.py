@@ -23,7 +23,7 @@ from typing import Optional
 
 from .dedupe import deduplicate, stats_by_source
 from .model import ParkingSpot
-from .outputs import write_geojson, write_sqlite
+from .outputs import write_geojson, write_manifest, write_sqlite
 from .sources import SOURCES
 
 log = logging.getLogger("pipeline")
@@ -108,8 +108,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     spots.sort(key=lambda s: (s.lat, s.lon, s.uid))
 
     generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    write_geojson(spots, args.output_dir / "invapaikat.geojson", generated_at=generated_at)
-    write_sqlite(spots, args.output_dir / "invapaikat.sqlite", generated_at=generated_at)
+    geojson_path = args.output_dir / "invapaikat.geojson"
+    sqlite_path = args.output_dir / "invapaikat.sqlite"
+    write_geojson(spots, geojson_path, generated_at=generated_at)
+    write_sqlite(spots, sqlite_path, generated_at=generated_at)
+    write_manifest(
+        spots,
+        args.output_dir / "manifest.json",
+        generated_at=generated_at,
+        files={"geojson": geojson_path, "sqlite": sqlite_path},
+    )
 
     log.info("Lopputulos lähteittäin: %s", stats_by_source(spots))
     log.info("Yhteensä %d kohdetta", len(spots))
