@@ -1,0 +1,148 @@
+"""Ulostulomuodot: GeoJSON jakelua varten, SQLite sovelluksen kyselyihin.
+
+Sovellus ei koskaan pidä kaikkia kohteita kartalla yhtä aikaa, vaan hakee
+näkyvän karttaruudun pisteet SQLitestä. Siksi R-tree-indeksi on olennainen:
+ilman sitä viewport-kysely olisi taulun täysiskannaus jokaisella kartansiirrolla.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import sqlite3
+from dataclasses import asdict
+from pathlib import Path
+from typing import Any, Optional
+
+from .model import ParkingSpot
+
+log = logging.getLogger(__name__)
+
+SCHEMA_VERSION = 1
+
+
+def _properties(spot: ParkingSpot) -> dict[str, Any]:
+    props = asdict(spot)
+    props.pop("lat")
+    props.pop("lon")
+    return {k: v for k, v in props.items() if v not in (None, {}, [])}
+
+
+def write_geojson(spots: list[ParkingSpot], path: Path, *, generated_at: str) -> None:
+    payload = {
+        "type": "FeatureCollection",
+        "metadata": {
+            "generated_at": generated_at,
+            "schema_version": SCHEMA_VERSION,
+            "count": len(spots),
+        },
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    # GeoJSON on aina lon, lat -järjestyksessä (RFC 7946).
+                    "type": "Point",
+                    "coordinates": [round(spot.lon, 7), round(spot.lat, 7)],
+                },
+                "properties": _properties(spot),
+            }
+            for spot in spots
+        ],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    log.info("Kirjoitettu %s (%d kohdetta, %.1f kt)", path, len(spots), path.stat().st_size / 1024)
+
+
+def _rtree_available(conn: sqlite3.Connection) -> bool:
+    try:
+        conn.execute("CREATE VIRTUAL TABLE _rtree_probe USING rtree(id, minx, maxx)")
+        conn.execute("DROP TABLE _rtree_probe")
+        return True
+    except sqlite3.OperationalError:
+        return False
+
+
+def write_sqlite(spots: list[ParkingSpot], path: Path, *, generated_at: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        path.unlink()
+
+    conn = sqlite3.connect(path)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE spots (
+                id             INTEGER PRIMARY KEY,
+                uid            TEXT NOT NULL UNIQUE,
+                source         TEXT NOT NULL,
+                lat            REAL NOT NULL,
+                lon            REAL NOT NULL,
+                precision      TEXT NOT NULL,
+                capacity       INTEGER,
+                name           TEXT,
+                address        TEXT,
+                restrictions   TEXT,
+                max_duration_h REAL,
+                fee            INTEGER,
+                updated        TEXT,
+                merged_from    TEXT
+            )
+            """
+        )
+        conn.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
+
+        rows = [
+            (
+                index,
+                spot.uid,
+                spot.source,
+                spot.lat,
+                spot.lon,
+                spot.precision,
+                spot.capacity,
+                spot.name,
+                spot.address,
+                spot.restrictions,
+                spot.max_duration_h,
+                None if spot.fee is None else int(spot.fee),
+                spot.updated,
+                ",".join(spot.merged_from) or None,
+            )
+            for index, spot in enumerate(spots, start=1)
+        ]
+        conn.executemany(
+            "INSERT INTO spots VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            rows,
+        )
+
+        has_rtree = _rtree_available(conn)
+        if has_rtree:
+            conn.execute(
+                "CREATE VIRTUAL TABLE spots_bbox USING rtree(id, min_lat, max_lat, min_lon, max_lon)"
+            )
+            conn.executemany(
+                "INSERT INTO spots_bbox VALUES (?,?,?,?,?)",
+                [(row[0], row[3], row[3], row[4], row[4]) for row in rows],
+            )
+        else:
+            # Sovelluksen SQLite tukee R-treetä, mutta pipelinen ajoympäristö
+            # ei välttämättä. Tavallinen indeksi pitää tiedoston käyttökelpoisena.
+            log.warning("SQLite ilman R-tree-tukea — käytetään tavallista indeksiä")
+            conn.execute("CREATE INDEX idx_spots_latlon ON spots(lat, lon)")
+
+        conn.executemany(
+            "INSERT INTO meta VALUES (?,?)",
+            [
+                ("generated_at", generated_at),
+                ("schema_version", str(SCHEMA_VERSION)),
+                ("count", str(len(spots))),
+                ("has_rtree", "1" if has_rtree else "0"),
+            ],
+        )
+        conn.commit()
+        conn.execute("VACUUM")
+    finally:
+        conn.close()
+
+    log.info("Kirjoitettu %s (%d kohdetta, %.1f kt)", path, len(spots), path.stat().st_size / 1024)
