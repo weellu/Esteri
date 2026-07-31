@@ -20,6 +20,15 @@ log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
 
+# Aineisto sisältää OpenStreetMap-dataa, joten yhdistelmä on ODbL:n
+# tarkoittama johdettu tietokanta ja jaettava samalla lisenssillä.
+# Attribuutio kulkee tiedoston mukana, jotta se ei katoa matkalla.
+LICENSE = "ODbL-1.0"
+ATTRIBUTION = (
+    "© OpenStreetMap-tekijät (ODbL), © Väylävirasto (CC BY 4.0), "
+    "© Tampereen kaupunki, © Turun kaupunki, © Helsingin kaupunki"
+)
+
 
 def _properties(spot: ParkingSpot) -> dict[str, Any]:
     props = asdict(spot)
@@ -35,6 +44,8 @@ def write_geojson(spots: list[ParkingSpot], path: Path, *, generated_at: str) ->
             "generated_at": generated_at,
             "schema_version": SCHEMA_VERSION,
             "count": len(spots),
+            "license": LICENSE,
+            "attribution": ATTRIBUTION,
         },
         "features": [
             {
@@ -138,6 +149,8 @@ def write_sqlite(spots: list[ParkingSpot], path: Path, *, generated_at: str) -> 
                 ("schema_version", str(SCHEMA_VERSION)),
                 ("count", str(len(spots))),
                 ("has_rtree", "1" if has_rtree else "0"),
+                ("license", LICENSE),
+                ("attribution", ATTRIBUTION),
             ],
         )
         conn.commit()

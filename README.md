@@ -1,0 +1,204 @@
+# LEParkki
+
+Liikkumisesteisten pysäköintipaikkojen karttasovellus iOS:lle ja Androidille.
+Aineisto kootaan avoimista rajapinnoista: OpenStreetMap, Digiroad sekä
+Tampereen, Turun ja Helsingin omat avoimet aineistot.
+
+## Tilanne
+
+| Osa | Tila |
+|---|---|
+| Datapipeline | Valmis, tuottaa 2 787 kohdetta |
+| Julkaisuputki (GitHub Actions + Pages) | Valmis, odottaa repon luontia |
+| Karttanäkymä, klusterointi, kohteen tiedot | Valmis, ajettu iOS-simulaattorissa |
+| Navigointi puhelimen karttasovellukseen | Valmis |
+| Haku osoitteella ja paikannimellä | Valmis |
+| Datan päivitys verkosta | Ei aloitettu, nyt vain bundlattu |
+| Käyttäjien lisäämät paikat | Ei aloitettu, vaatisi taustapalvelimen |
+
+## Datapipeline
+
+Ajo:
+
+```bash
+python3 -m pipeline.build                       # kaikki lähteet
+python3 -m pipeline.build --sources tampere turku
+python3 -m pipeline.build --use-cache           # ei verkkoa, kehitykseen
+```
+
+Ei ulkoisia riippuvuuksia — pelkkä Pythonin standardikirjasto. Kaikki lähteet
+osaavat uudelleenprojisoida WGS84:ään palvelinpuolella, joten
+koordinaattimuunnoskirjastoa ei tarvita.
+
+Testit:
+
+```bash
+python3 -m unittest discover -s tests -t .
+```
+
+### Ulostulot
+
+`data/invapaikat.geojson` (799 kt, pakattuna 66 kt) — jakelua varten.
+`data/invapaikat.sqlite` (488 kt) — sovelluksen käyttöön, R-tree-indeksillä.
+
+Sovellus ei pidä kaikkia kohteita kartalla yhtä aikaa vaan hakee näkyvän
+karttaruudun pisteet SQLitestä. Ilman R-treetä jokainen kartansiirto olisi
+taulun täysiskannaus.
+
+### Lähteet ja niiden tuottamat määrät
+
+| Lähde | Raakahavaintoja | Lopputuloksessa |
+|---|---:|---:|
+| OpenStreetMap | 2 288 | 2 240 |
+| Digiroad (lisäkilpi H12.7) | 232 | 226 |
+| Tampere | 156 | 145 |
+| Turku | 118 | 88 |
+| Helsinki | 88 | 88 |
+| **Yhteensä** | **2 882** | **2 787** |
+
+Rajapintojen yksityiskohdat, sudenkuopat ja umpikujat on dokumentoitu
+tiedostossa [`docs/tietolahteet.md`](docs/tietolahteet.md). Lue se ennen kuin
+muutat lähdemoduuleja — siellä on kirjattuna mm. miksi Digiroadin lisäkilpiä
+kysytään viidellä erillisellä kyselyllä ja miksi Turku vaatii selainmaisen
+User-Agentin.
+
+### Datan tarkkuus — tämä pitää näkyä käyttöliittymässä
+
+Kohteet eivät ole keskenään samanarvoisia, ja ero on käyttäjälle olennainen:
+
+| Tarkkuus | Kohteita | Mitä sijainti tarkoittaa |
+|---|---:|---|
+| `space` | 1 005 | Sijainti on itse pysäköintiruutu |
+| `area` | 1 468 | Alueen keskipiste — ruutu on jossain alueella |
+| `sign` | 314 | Liikennemerkki, ruutu merkin läheisyydessä |
+
+Yli puolet kohteista on alueen keskipisteitä. Sovellus ei saa esittää niitä
+samalla tavalla kuin tarkkoja ruutuja: autoilijalle "invapaikka tässä" ja
+"tällä pysäköintialueella on invapaikkoja" ovat eri lupaus.
+
+Paikkamäärä tunnetaan 2 397 kohteelle, osoite vain 214:lle.
+
+### Deduplikointi
+
+Saman lähteen kahta kohdetta ei koskaan yhdistetä — vierekkäiset invaruudut
+ovat OSM:ssä erillisiä pisteitä noin kolmen metrin päässä toisistaan, ja
+etäisyyspohjainen yhdistely sulauttaisi kahden paikan pysäköintipaikan yhdeksi.
+Yhdistely tapahtuu vain lähteiden välillä, ilman ketjuuntumista.
+
+Sijainti otetaan tarkimmasta havainnosta, metatiedot luotettavimmasta
+lähteestä. Käytännössä Digiroadin liikennemerkki antaa hyvän sijainnin ja
+Tampereen aluetieto paikkamäärän — yhdistettynä molemmat.
+
+Kynnysarvot (25 m tarkoille havainnoille, 60 m kun mukana on alue) ovat
+perusteltuja arvauksia, **joita ei ole validoitu maastossa.**
+
+## Tunnetut rajoitteet
+
+- **Espoo ja Oulu puuttuvat.** Molemmilla on oma liikennemerkkirekisteri
+  oikealla skeemalla, mutta GetFeature palauttaa HTTP 401 eli aineisto ei ole
+  avointa. Avoimen pääsyn pyytäminen kaupungeilta olisi todennäköisesti suurin
+  yksittäinen parannus, jonka voi saada ilman koodia.
+- **Helsingin aineisto kattaa vain kantakaupungin** ja
+  asukaspysäköintivyöhykkeet, joten Helsingin todellinen määrä on suurempi.
+- **Digiroadin kattavuus on heikko:** invamerkkejä löytyy vain 37 kunnasta,
+  vaikka merkkejä on kaikkiaan lähes 600 000.
+- **Overpass-peilit eivät ole synkronissa.** Peräkkäiset ajot voivat tuottaa
+  hieman eri määrän kohteita sen mukaan, mikä peili vastaa. Ero on ollut
+  luokkaa 1–3 %.
+- **Mitään lähdettä ei ole validoitu maastossa.**
+
+## Lisenssit
+
+**Koodi on MIT, aineisto on ODbL 1.0.** Nämä eivät ole sama asia.
+
+Aineisto sisältää OpenStreetMap-dataa, ja ODbL on share-alike: yhdistämällä
+OSM:n muihin lähteisiin syntyy johdettu tietokanta, jolloin **koko yhdistetty
+aineisto** on ODbL:n alainen — ei pelkkä OSM-osuus. Tämä ei estä kaupallista
+käyttöä eikä kauppajakelua, mutta aineisto on pidettävä avoimena ja
+attribuoituna.
+
+Attribuutio on toteutettu pysyvästi näkyvänä palkkina kartan alalaidassa, ei
+valikon taakse piilotettuna. Lisäksi `license`- ja `attribution`-kentät kulkevat
+aineistotiedoston mukana, jotta tieto ei katoa jos tiedosto irtoaa reposta.
+
+Yksityiskohdat ja lähdekohtaiset velvoitteet: [`docs/lisenssit.md`](docs/lisenssit.md).
+
+## Julkaisu
+
+`.github/workflows/build-data.yml` ajaa pipelinen viikoittain ja julkaisee
+tuloksen GitHub Pagesiin. Julkaisu keskeytyy, jos kohteita on alle 1 500 —
+rajapinnan muutos ei saa korvata toimivaa aineistoa lähes tyhjällä.
+
+Kaikki maksutonta: GitHub Actions ja Pages riittävät, backendiä ei tarvita.
+
+## Sovellus
+
+Flutter, kohdealustat iOS ja Android. Karttakirjasto `flutter_map` 8.3
+klusteroinnilla (`flutter_map_marker_cluster` 8.2).
+
+```bash
+flutter run
+flutter test
+```
+
+### API-avain
+
+Taustakartta tulee Maanmittauslaitokselta ja vaatii maksuttoman API-avaimen
+(OmaTili-rekisteröinti, ei laskutustiliä eikä luottokorttia). Avain annetaan
+sovelluksen sisällä avainkuvakkeesta — sitä ei tarvitse kääntää mukaan.
+Sovellus testaa avaimen hakemalla yhden tiilen ja kertoo heti, kelpaako se.
+
+Kehityksessä avaimen voi antaa myös käännösaikana:
+
+```bash
+flutter run --dart-define=MML_API_KEY=<avain>
+```
+
+**Sovellus on käyttökelpoinen ilman avainta.** Invapaikat, kohteen tiedot ja
+navigointi toimivat; vain taustakartta jää tyhjäksi. Navigointi avaa puhelimen
+oman karttasovelluksen `url_launcher`illa eikä vaadi avainta millään alustalla.
+
+### Haku
+
+Hakupalkki yhdistää kaksi eri asiaa:
+
+1. **Osoitteet ja paikannimet** Maanmittauslaitoksen geokoodauspalvelusta
+   (`avoin-paikkatieto.maanmittauslaitos.fi/geocoding/v2/pelias/search`).
+   Tämä on ensisijainen tapa, koska käyttäjä tietää minne on menossa — ei
+   minkä nimisen invapaikan luo. Valinta siirtää kartan sinne zoomilla 16.
+2. **Aineiston omat kohteet** nimen tai osoitteen perusteella. Täydentävä,
+   koska osoite tunnetaan vain 214 kohteelle ja nimi harvemmalle.
+
+Geokoodaus käyttää samaa API-avainta kuin karttatiilet, joten erillistä
+rekisteröitymistä ei tarvita. Ilman avainta aineiston oma haku toimii silti —
+käyttäjä ei jää täysin ilman hakua.
+
+Haetaan vain lähteitä `addresses`, `interpolated-road-addresses` ja
+`geographic-names`. Kiinteistötunnukset ja karttalehdet on jätetty pois: ne
+eivät auta pysäköintipaikan etsijää.
+
+Koordinaattien akselijärjestys päätellään arvoalueista samalla logiikalla kuin
+Turun aineistossa. Suomen leveys- ja pituusasteet eivät mene päällekkäin, joten
+CRS84:n ja EPSG:4326:n sekaannus ei voi sijoittaa tulosta hiljaisesti väärin.
+
+### Arkkitehtuuri
+
+Aineisto toimitetaan sovelluksen mukana SQLitenä ja kopioidaan ensimmäisellä
+käynnistyksellä laitteelle. Kartalle ei koskaan ladata koko aineistoa vaan
+ainoastaan näkyvän karttaruudun kohteet R-tree-kyselyllä — `flutter_map`
+renderöi markerit Flutter-widgeteinä, eikä tuhansia widgetejä kannata pitää
+puussa yhtä aikaa edes klusteroituna.
+
+Karttanäkymä riippuu `SpotRepository`-rajapinnasta eikä suoraan SQLitestä,
+jotta näkymän logiikka on testattavissa ilman natiiveja liitännäisiä.
+
+### Datan päivitys
+
+Kun pipeline on ajettu uudelleen:
+
+```bash
+cp data/invapaikat.sqlite assets/data/
+# päivitä Config.bundledDataVersion uudella generated_at-arvolla
+```
+
+Ilman version nostoa sovellus jättää vanhan kopion käyttöön.

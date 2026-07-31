@@ -12,6 +12,7 @@ import '../data/spot_database.dart';
 import '../services/geocoder.dart';
 import '../services/map_key_store.dart';
 import 'api_key_screen.dart';
+import 'attribution_bar.dart';
 import 'map_search_bar.dart';
 import 'spot_details_sheet.dart';
 import 'spot_marker.dart';
@@ -241,15 +242,27 @@ class _MapScreenState extends State<MapScreen> {
                   ],
                 ),
               ),
-              const Positioned(left: 12, bottom: 12, child: MapLegend()),
+              const Positioned(
+                left: 12,
+                bottom: AttributionBar.height + 12,
+                child: MapLegend(),
+              ),
               Positioned(
                 right: 12,
-                bottom: 12,
+                bottom: AttributionBar.height + 12,
                 child: FloatingActionButton(
                   onPressed: _goToMyLocation,
                   tooltip: 'Oma sijainti',
                   child: const Icon(Icons.my_location),
                 ),
+              ),
+              // Attribuutio on lisenssiehto, joten se pidetään aina näkyvissä
+              // eikä piiloteta valikon taakse.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: AttributionBar(showMapTiles: widget.keyStore.hasKey),
               ),
             ],
           );
