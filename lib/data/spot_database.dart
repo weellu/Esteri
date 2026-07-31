@@ -42,7 +42,25 @@ class SpotDatabase implements SpotRepository {
   final Database _db;
   final bool _useRtree;
 
-  static const String _versionKey = 'bundled_data_version';
+  /// Levyllä olevan aineiston versio (`generated_at`). Voi olla peräisin
+  /// joko sovelluksen mukana tulleesta kopiosta tai verkosta ladatusta
+  /// päivityksestä.
+  static const String installedVersionKey = 'installed_data_version';
+
+  static Future<String> localPath() async {
+    final dir = await getApplicationSupportDirectory();
+    return p.join(dir.path, 'invapaikat.sqlite');
+  }
+
+  static Future<String?> installedVersion() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(installedVersionKey);
+  }
+
+  static Future<void> setInstalledVersion(String version) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(installedVersionKey, version);
+  }
 
   static Future<SpotDatabase> open() async {
     final path = await _ensureLocalCopy();
@@ -55,15 +73,18 @@ class SpotDatabase implements SpotRepository {
   }
 
   /// Kopioi assetissa oleva tietokanta laitteelle, jos sitä ei vielä ole tai
-  /// jos mukana toimitettu versio on vaihtunut.
+  /// jos mukana toimitettu versio on **uudempi** kuin levyllä oleva.
+  ///
+  /// Vertailu on nimenomaan "uudempi", ei "eri". Verkosta ladattu päivitys on
+  /// tuoreempi kuin sovelluksen mukana tullut kopio, eikä sitä saa ylikirjoittaa
+  /// vanhemmalla assetilla joka käynnistyksellä. Versiot ovat ISO-8601-aikaleimoja
+  /// UTC:ssä, joten merkkijonovertailu vastaa aikajärjestystä.
   static Future<String> _ensureLocalCopy() async {
-    final dir = await getApplicationSupportDirectory();
-    final target = p.join(dir.path, 'invapaikat.sqlite');
-    final prefs = await SharedPreferences.getInstance();
-    final installed = prefs.getString(_versionKey);
+    final target = await localPath();
+    final installed = await installedVersion();
 
     final exists = File(target).existsSync();
-    if (exists && installed == Config.bundledDataVersion) {
+    if (exists && installed != null && installed.compareTo(Config.bundledDataVersion) >= 0) {
       return target;
     }
 
@@ -72,8 +93,8 @@ class SpotDatabase implements SpotRepository {
       bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
       flush: true,
     );
-    await prefs.setString(_versionKey, Config.bundledDataVersion);
-    debugPrint('Invapaikka-aineisto asennettu: ${Config.bundledDataVersion}');
+    await setInstalledVersion(Config.bundledDataVersion);
+    debugPrint('Invapaikka-aineisto asennettu assetista: ${Config.bundledDataVersion}');
     return target;
   }
 

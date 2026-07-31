@@ -47,6 +47,21 @@ class Config {
 
   static const String assetDatabasePath = 'assets/data/invapaikat.sqlite';
 
+  /// Julkaistu aineisto. Pipeline ajetaan viikoittain GitHub Actionsissa ja
+  /// tulos julkaistaan Pagesiin, joten datapäivitys ei vaadi kauppakierrosta.
+  static const String dataBaseUrl = 'https://weellu.github.io/LEParkki';
+  static const String dataManifestUrl = '$dataBaseUrl/manifest.json';
+  static const String dataSqliteUrl = '$dataBaseUrl/invapaikat.sqlite';
+
+  /// Skeemaversio, jonka tämä sovellusversio osaa lukea. Uudempaa ei asenneta,
+  /// koska kentät voivat olla muuttuneet.
+  static const int supportedSchemaVersion = 1;
+
+  /// Alaraja hyväksyttävälle aineistolle. Sama suoja kuin julkaisuputkessa:
+  /// rikkoutunut lähde tai katkennut lataus ei saa korvata toimivaa dataa
+  /// lähes tyhjällä.
+  static const int minAcceptableSpotCount = 1500;
+
   /// Kartan aloitusnäkymä, kun sijaintia ei ole käytettävissä.
   static const double fallbackLat = 61.4978;
   static const double fallbackLon = 23.7610;

@@ -13,7 +13,7 @@ Tampereen, Turun ja Helsingin omat avoimet aineistot.
 | Karttanäkymä, klusterointi, kohteen tiedot | Valmis, ajettu iOS-simulaattorissa |
 | Navigointi puhelimen karttasovellukseen | Valmis |
 | Haku osoitteella ja paikannimellä | Valmis |
-| Datan päivitys verkosta | Ei aloitettu, nyt vain bundlattu |
+| Datan päivitys verkosta | Valmis |
 | Käyttäjien lisäämät paikat | Ei aloitettu, vaatisi taustapalvelimen |
 
 ## Datapipeline
@@ -194,11 +194,32 @@ jotta näkymän logiikka on testattavissa ilman natiiveja liitännäisiä.
 
 ### Datan päivitys
 
-Kun pipeline on ajettu uudelleen:
+Sovellus tarkistaa käynnistyessään julkaistun manifestin ja lataa tuoreemman
+aineiston taustalla. **Datapäivitys ei siis vaadi kauppakierrosta** — se on
+Flutterissa erityisen arvokasta, koska OTA-päivityksiä ei ole. Päivityksen voi
+myös käynnistää käsin asetuksista.
+
+Päivitys on tarkoituksellisen varovainen: vanha aineisto korvataan vain jos
+uusi läpäisee kaikki tarkistukset. Sovellusta käytetään liikkeellä, eikä
+epäonnistunutta päivitystä voi korjata paikan päällä.
+
+Uusi aineisto hylätään, jos
+- skeemaversio ei ole tämän sovellusversion tukema,
+- kohteita on alle 1 500 (sama suoja kuin julkaisuputkessa),
+- ladatun tiedoston rivimäärä ei täsmää manifestin lukuun — katkennut lataus
+  voi jättää metatiedon paikalleen mutta rivit vajaiksi, tai
+- tiedosto ei avaudu tietokantana.
+
+Julkaistun aineiston versio ei myöskään voi kulkea taaksepäin: vanhempi
+julkaisu ei korvaa uudempaa paikallista kopiota.
+
+Bundlattu aineisto on vain ensiasennuksen lähtötila. Se päivitetään näin:
 
 ```bash
 cp data/invapaikat.sqlite assets/data/
 # päivitä Config.bundledDataVersion uudella generated_at-arvolla
 ```
 
-Ilman version nostoa sovellus jättää vanhan kopion käyttöön.
+Bundlattu kopio otetaan käyttöön vain jos se on **uudempi** kuin levyllä oleva.
+Vertailu on nimenomaan "uudempi", ei "eri" — muuten sovelluspäivitys
+ylikirjoittaisi verkosta ladatun tuoreemman aineiston joka käynnistyksellä.

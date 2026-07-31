@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
-import 'data/spot_database.dart';
+import 'data/spot_data_source.dart';
+import 'services/data_updater.dart';
 import 'services/map_key_store.dart';
 import 'ui/map_screen.dart';
 import 'ui/spot_marker.dart';
@@ -42,8 +45,10 @@ class _LEParkkiAppState extends State<LEParkkiApp> {
           }
           final services = snapshot.data!;
           return MapScreen(
-            database: services.database,
+            database: services.dataSource,
             keyStore: services.keyStore,
+            dataSource: services.dataSource,
+            updater: services.updater,
           );
         },
       ),
@@ -52,17 +57,33 @@ class _LEParkkiAppState extends State<LEParkkiApp> {
 }
 
 class AppServices {
-  AppServices(this.database, this.keyStore);
+  AppServices(this.dataSource, this.keyStore, this.updater);
 
-  final SpotDatabase database;
+  final SpotDataSource dataSource;
   final MapKeyStore keyStore;
+  final DataUpdater updater;
 
   static Future<AppServices> create() async {
-    // Tietokannan asennus ja avaimen lataus ovat riippumattomia, joten
+    // Aineiston asennus ja avaimen lataus ovat riippumattomia, joten
     // ne tehdään rinnakkain.
-    final database = SpotDatabase.open();
+    final dataSource = SpotDataSource.open();
     final keyStore = MapKeyStore.load();
-    return AppServices(await database, await keyStore);
+    final services = AppServices(await dataSource, await keyStore, DataUpdater());
+
+    // Päivitystä ei odoteta: kartta avautuu heti mukana tulleella tai
+    // aiemmin ladatulla aineistolla, ja tuoreempi vaihtuu tilalle taustalla
+    // jos sellainen löytyy. Epäonnistunut päivitys ei näy käyttäjälle —
+    // vanha aineisto jää voimaan ja tilanteen voi tarkistaa asetuksista.
+    unawaited(services._updateInBackground());
+    return services;
+  }
+
+  Future<void> _updateInBackground() async {
+    final result = await updater.update(dataSource);
+    if (result.status != UpdateStatus.updated &&
+        result.status != UpdateStatus.upToDate) {
+      debugPrint('Aineiston taustapäivitys: ${result.message}');
+    }
   }
 }
 

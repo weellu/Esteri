@@ -8,10 +8,12 @@ import 'package:latlong2/latlong.dart';
 
 import '../config.dart';
 import '../data/parking_spot.dart';
+import '../data/spot_data_source.dart';
 import '../data/spot_database.dart';
+import '../services/data_updater.dart';
 import '../services/geocoder.dart';
 import '../services/map_key_store.dart';
-import 'api_key_screen.dart';
+import 'settings_screen.dart';
 import 'attribution_bar.dart';
 import 'map_search_bar.dart';
 import 'spot_details_sheet.dart';
@@ -23,6 +25,8 @@ class MapScreen extends StatefulWidget {
     required this.database,
     required this.keyStore,
     this.geocoder,
+    this.dataSource,
+    this.updater,
   });
 
   final SpotRepository database;
@@ -30,6 +34,11 @@ class MapScreen extends StatefulWidget {
 
   /// Testeissä korvattavissa; tuotannossa luodaan oletustoteutus.
   final MmlGeocoder? geocoder;
+
+  /// Vaihdettava aineistolähde. Kun tämä on annettu, kartta hakee kohteet
+  /// uudelleen aineiston päivittyessä ja asetuksista voi päivittää datan.
+  final SpotDataSource? dataSource;
+  final DataUpdater? updater;
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -48,11 +57,24 @@ class _MapScreenState extends State<MapScreen> {
   LatLng? _userPosition;
 
   @override
+  void initState() {
+    super.initState();
+    // Aineisto voi vaihtua taustalla latautuvaan päivitykseen, jolloin
+    // näkyvän alueen kohteet on haettava uudelleen.
+    widget.dataSource?.addListener(_onDataChanged);
+  }
+
+  @override
   void dispose() {
+    widget.dataSource?.removeListener(_onDataChanged);
     _debounce?.cancel();
     if (_ownsGeocoder) _geocoder.dispose();
     _mapController.dispose();
     super.dispose();
+  }
+
+  void _onDataChanged() {
+    if (mounted) _loadVisible(_mapController.camera.visibleBounds);
   }
 
   /// Siirrä kartta hakutuloksen kohdalle. Zoom 16 näyttää korttelin, mikä
@@ -130,7 +152,11 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _openKeyScreen() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ApiKeyScreen(store: widget.keyStore),
+        builder: (_) => SettingsScreen(
+          store: widget.keyStore,
+          dataSource: widget.dataSource,
+          updater: widget.updater,
+        ),
       ),
     );
   }
