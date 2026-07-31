@@ -111,6 +111,36 @@ void main() {
     expect(find.text('Taustakartta puuttuu'), findsNothing);
   });
 
+  testWidgets('kyselyn epäonnistuminen näytetään eikä jätetä tyhjäksi kartaksi',
+      (tester) async {
+    // Tyhjä kartta ilman selitystä näyttää käyttäjälle samalta kuin
+    // "tällä alueella ei ole invapaikkoja". Juuri tämä piilotti Androidin
+    // rtree-virheen: sovellus näytti toimivan, mutta kohteita ei koskaan tullut.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MapScreen(
+          database: FailingSpotRepository(),
+          keyStore: await fakeKeyStore(key: 'avain'),
+          geocoder: fakeGeocoder(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Invapaikkoja ei voitu ladata.'), findsOneWidget);
+  });
+
+  testWidgets('onnistunut haku ei näytä virheilmoitusta', (tester) async {
+    await pumpMap(
+      tester,
+      FakeSpotRepository([spotAt(Config.fallbackLat, Config.fallbackLon)]),
+      await fakeKeyStore(),
+    );
+    expect(find.text('Invapaikkoja ei voitu ladata.'), findsNothing);
+  });
+
   testWidgets('hakupalkki ja selite näkyvät kartalla', (tester) async {
     await pumpMap(tester, FakeSpotRepository([]), await fakeKeyStore());
     expect(find.byType(TextField), findsOneWidget);

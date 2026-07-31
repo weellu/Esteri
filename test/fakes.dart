@@ -42,6 +42,23 @@ class FakeSpotRepository implements SpotRepository {
   }
 }
 
+/// Lähde, jonka kysely epäonnistuu — esim. puuttuva SQLite-moduuli.
+class FailingSpotRepository implements SpotRepository {
+  @override
+  Future<List<ParkingSpot>> spotsInBounds({
+    required double minLat,
+    required double maxLat,
+    required double minLon,
+    required double maxLon,
+    int limit = Config.maxSpotsPerViewport,
+  }) async =>
+      throw Exception('no such module: rtree');
+
+  @override
+  Future<List<ParkingSpot>> searchByText(String query, {int limit = 20}) async =>
+      const [];
+}
+
 ParkingSpot spotAt(
   double lat,
   double lon, {

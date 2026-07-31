@@ -65,11 +65,30 @@ class SpotDatabase implements SpotRepository {
   static Future<SpotDatabase> open() async {
     final path = await _ensureLocalCopy();
     final db = await openDatabase(path, readOnly: true);
+    return fromDatabase(db);
+  }
 
-    final meta = await db.query('meta', where: 'key = ?', whereArgs: ['has_rtree']);
-    final useRtree = meta.isNotEmpty && meta.first['value'] == '1';
+  @visibleForTesting
+  static Future<SpotDatabase> fromDatabase(Database db) async =>
+      SpotDatabase._(db, await rtreeUsable(db));
 
-    return SpotDatabase._(db, useRtree);
+  /// Onko R-tree käytettävissä **tällä laitteella**.
+  ///
+  /// Tätä ei voi päätellä tiedoston metatiedosta. `has_rtree` kertoo vain,
+  /// tukiko aineiston rakentanut kone R-treetä — ei sitä, osaako lukeva laite
+  /// sitä. Androidin järjestelmä-SQLitestä moduuli puuttuu, jolloin kysely
+  /// kaatuu virheeseen "no such module: rtree" vaikka taulu on tiedostossa.
+  /// iOS:llä moduuli on, joten vika ei näy siellä lainkaan.
+  ///
+  /// Ainoa luotettava tapa on kokeilla kyselyä.
+  @visibleForTesting
+  static Future<bool> rtreeUsable(Database db) async {
+    try {
+      await db.rawQuery('SELECT id FROM spots_bbox LIMIT 1');
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Kopioi assetissa oleva tietokanta laitteelle, jos sitä ei vielä ole tai
@@ -100,8 +119,8 @@ class SpotDatabase implements SpotRepository {
 
   /// Hae näkyvän karttaruudun kohteet.
   ///
-  /// R-tree-indeksi tekee tästä vakioaikaisen suhteessa aineiston kokoon;
-  /// ilman sitä jokainen kartansiirto olisi taulun täysiskannaus.
+  /// Käyttää R-treetä jos laite tukee sitä, muuten (lat, lon) -indeksiä.
+  /// Molemmat palauttavat saman tuloksen; ero on vain nopeudessa.
   @override
   Future<List<ParkingSpot>> spotsInBounds({
     required double minLat,

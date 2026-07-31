@@ -152,6 +152,12 @@ def write_sqlite(spots: list[ParkingSpot], path: Path, *, generated_at: str) -> 
             rows,
         )
 
+        # Tavallinen indeksi luodaan AINA, ei vain R-treen puuttuessa.
+        # Androidin järjestelmä-SQLitessä ei ole rtree-moduulia, joten
+        # sovellus joutuu siellä käyttämään tätä indeksiä riippumatta siitä,
+        # tukiko aineiston rakentanut kone R-treetä.
+        conn.execute("CREATE INDEX idx_spots_latlon ON spots(lat, lon)")
+
         has_rtree = _rtree_available(conn)
         if has_rtree:
             conn.execute(
@@ -162,10 +168,7 @@ def write_sqlite(spots: list[ParkingSpot], path: Path, *, generated_at: str) -> 
                 [(row[0], row[3], row[3], row[4], row[4]) for row in rows],
             )
         else:
-            # Sovelluksen SQLite tukee R-treetä, mutta pipelinen ajoympäristö
-            # ei välttämättä. Tavallinen indeksi pitää tiedoston käyttökelpoisena.
-            log.warning("SQLite ilman R-tree-tukea — käytetään tavallista indeksiä")
-            conn.execute("CREATE INDEX idx_spots_latlon ON spots(lat, lon)")
+            log.warning("SQLite ilman R-tree-tukea — aineistoon ei kirjoiteta spots_bbox-taulua")
 
         conn.executemany(
             "INSERT INTO meta VALUES (?,?)",

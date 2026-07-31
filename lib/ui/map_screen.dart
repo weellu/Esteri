@@ -54,6 +54,7 @@ class _MapScreenState extends State<MapScreen> {
 
   Timer? _debounce;
   bool _loading = false;
+  String? _loadError;
   LatLng? _userPosition;
 
   @override
@@ -110,10 +111,22 @@ class _MapScreenState extends State<MapScreen> {
       );
       if (!mounted) return;
       setState(() {
+        _loadError = null;
         _spots = spots;
         _spotsByKey
           ..clear()
           ..addEntries(spots.map((s) => MapEntry(ValueKey(s.uid), s)));
+      });
+    } catch (error) {
+      // Ilman tätä kyselyn virhe karkasi käsittelemättömänä poikkeuksena ja
+      // kartta jäi vain tyhjäksi. Käyttäjälle "ei invapaikkoja" ja "haku
+      // epäonnistui" ovat täysin eri asiat, joten vika on näytettävä.
+      debugPrint('Kohteiden haku epäonnistui: $error');
+      if (!mounted) return;
+      setState(() {
+        _loadError = 'Invapaikkoja ei voitu ladata.';
+        _spots = const [];
+        _spotsByKey.clear();
       });
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -260,6 +273,11 @@ class _MapScreenState extends State<MapScreen> {
                       onSpotSelected: _goToSpot,
                       onOpenSettings: _openKeyScreen,
                     ),
+                    if (_loadError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: _ErrorBanner(message: _loadError!),
+                      ),
                     if (!widget.keyStore.hasKey)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
@@ -321,6 +339,30 @@ class _MissingKeyBanner extends StatelessWidget {
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: onTap,
+      ),
+    );
+  }
+}
+
+/// Ilmoitus siitä, ettei kohteita voitu ladata.
+///
+/// Tyhjä kartta ilman selitystä on käyttäjälle harhaanjohtava: se näyttää
+/// samalta kuin "tällä alueella ei ole invapaikkoja".
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      color: theme.colorScheme.errorContainer,
+      child: ListTile(
+        leading: Icon(Icons.warning_amber, color: theme.colorScheme.onErrorContainer),
+        title: Text(message),
+        subtitle: const Text('Kokeile käynnistää sovellus uudelleen.'),
       ),
     );
   }

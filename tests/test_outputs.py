@@ -114,6 +114,28 @@ class TestSqlite(unittest.TestCase):
             conn.close()
         self.assertEqual([r[0] for r in rows], ["osm:node/2"], "Tampereen kohde ei kuulu ruutuun")
 
+    def test_latlon_index_exists_even_when_rtree_is_available(self):
+        # Androidin järjestelmä-SQLitessä ei ole rtree-moduulia, joten sovellus
+        # joutuu siellä käyttämään tätä indeksiä riippumatta siitä, tukiko
+        # aineiston rakentanut kone R-treetä. Aiemmin indeksi luotiin vain
+        # R-treen puuttuessa, jolloin Androidilla ei ollut kumpaakaan.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "out.sqlite"
+            write_sqlite(sample_spots(), path, generated_at=GENERATED_AT)
+            conn = sqlite3.connect(path)
+            indexes = [
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='index'"
+                ).fetchall()
+            ]
+            has_rtree = conn.execute(
+                "SELECT value FROM meta WHERE key='has_rtree'"
+            ).fetchone()[0]
+            conn.close()
+        self.assertIn("idx_spots_latlon", indexes)
+        self.assertEqual(has_rtree, "1", "testiympäristössä odotetaan R-tree-tukea")
+
     def test_meta_records_count_and_schema_version(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "out.sqlite"
