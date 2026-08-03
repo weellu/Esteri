@@ -40,6 +40,24 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
 
+    # flutter_additional_ios_build_settings nostaa minimiversion vain niissä
+    # kohteissa, jotka riippuvat Flutterista. CocoaPodsin luomat resurssiniput
+    # (esim. geolocator_apple-geolocator_apple_privacy) eivät riipu, joten
+    # niihin jää podspecin ilmoittama luku — geolocator_apple sanoo 11.0.
+    # Xcode 26 tukee enää väliä 12.0–26.5.99 ja varoittaa jokaisella
+    # käännöksellä.
+    #
+    # Sovellus itse vaatii 13.0, joten tätä alempi luku ei tarkoita mitään:
+    # nippua ei koskaan asenneta laitteelle, jolle itse sovellus ei asennu.
+    # Nostetaan kaikki alle 13.0 samaan lukuun, jottei sama varoitus palaa
+    # Xcoden nostaessa alarajaa uudelleen.
+    target.build_configurations.each do |config|
+      current = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
+      if current && current.to_f < 13.0
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+      end
+    end
+
     # Geolocatorin PermissionHandler viittaa requestAlwaysAuthorization-
     # rajapintaan, vaikka se ei ajossa koskaan päädy sinne: haara on
     # `else if`, ja NSLocationWhenInUseUsageDescription vie aina
