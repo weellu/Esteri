@@ -1,0 +1,26 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     24.0488208,
+     61.4642302
+    ]
+   },
+   "properties": {
+    "id": "u00001",
+    "reports": 1,
+    "first_seen": "2026-08-03",
+    "last_seen": "2026-08-03"
+   }
+  }
+ ],
+ "metadata": {
+  "kuvaus": "Käyttäjien ilmoittamat invapaikat. Moderoitu PR-katselmoinnissa.",
+  "license": "ODbL-1.0",
+  "count": 1
+ }
+}
