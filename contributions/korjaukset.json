@@ -1,0 +1,12 @@
+[
+ {
+  "uid": "tampere:1459",
+  "toiminto": "siirra",
+  "lat": 61.476855,
+  "lon": 23.761579,
+  "uusi_lat": 61.475691,
+  "uusi_lon": 23.761403,
+  "syy": "Piste oli 130-180 m paassa omasta osoitteestaan. Tampereen aineisto antaa kohteelle osoitteeksi Haapakuja 5, mutta koordinaatti osoitti sen pohjoispuolelle paikkaan, johon kayttajan mukaan ei paase autolla. Siirretty osoitteen kohdalle. Huom: uusi sijainti on geokoodattu osoitteesta eika maastohavainto, joten se on osoitteen tarkkuudella oikea eika ruudun. Kohteen precision on 'area', mika vastaa tata epatarkkuutta.",
+  "lisatty": "2026-08-03"
+ }
+]

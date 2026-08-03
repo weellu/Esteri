@@ -383,39 +383,54 @@ Alennettu käyttäjän kohde menettää myös tarkkuutensa (`space` → `area`):
 kiistelty kohde ei saa luvata tarkkaa ruutua, vaikka se olisi aiemmin noussut
 siihen.
 
-### Poistolista
+### Korjauslista
 
-`contributions/poistetut.json` on ylläpitäjän käsin kirjoittama lista kohteista,
-joita ei julkaista. Sitä tarvitaan, koska avoimen aineiston virhettä ei voi
-korjata tästä päästä: seuraava ajo hakee kohteen takaisin lähteestä.
+`contributions/korjaukset.json` on ylläpitäjän käsin kirjoittama lista
+kohteista, joita julkaisu käsittelee toisin kuin lähde sanoo. Sitä tarvitaan,
+koska avoimen aineiston virhettä ei voi korjata tästä päästä: seuraava ajo
+hakee kohteen takaisin lähteestä sellaisena kuin se siellä on.
+
+| `toiminto` | Vaikutus |
+|---|---|
+| `poista` | Kohdetta ei julkaista lainkaan |
+| `siirra` | Kohde julkaistaan kentissä `uusi_lat` / `uusi_lon` annetussa sijainnissa |
 
 ```json
 [
   {
     "uid": "tampere:1459",
+    "toiminto": "siirra",
     "lat": 61.476855,
     "lon": 23.761579,
-    "syy": "Piste 150 m päässä omasta osoitteestaan. Ilmoitettu Tampereelle.",
+    "uusi_lat": 61.475691,
+    "uusi_lon": 23.761403,
+    "syy": "Piste oli 130 m päässä omasta osoitteestaan (Haapakuja 5).",
     "lisatty": "2026-08-03"
   }
 ]
 ```
+
+**Siirto on useimmiten oikeampi kuin poisto.** Väärä koordinaatti ei tarkoita,
+ettei invapaikkaa ole — se tarkoittaa, että se on jossain muualla. Poisto
+hävittää tiedon, siirto korjaa sen.
 
 **Moderointiajo ei koskaan kirjoita tätä tiedostoa.** Koneen keräämä data on
 `tila.json`issa; tämä on ihmisen tekemä päätös. Samassa tiedostossa ne menisivät
 ennemmin tai myöhemmin päällekkäin.
 
 `syy` on käytännössä pakollinen: puolen vuoden päästä kukaan ei muista, miksi
-kohde on listalla, eikä sitä uskalla poistaa listalta silloinkaan kun lähde on
-korjattu.
+kohde on listalla, eikä riviä uskalla poistaa silloinkaan kun lähde on korjattu.
+Siihen kuuluu myös se, **mihin korjaus perustuu** — geokoodattu osoite ja
+maastohavainto ovat eri asioita, ja ero ratkaisee, voiko kohteen tarkkuutta
+nostaa myöhemmin.
 
 `lat` ja `lon` ovat turvaraja eivätkä koristeita. Deduplikoinnin ankkuri voi
-vaihtua ajojen välillä, jolloin sama uid osoittaa eri kohteeseen kuin poistoa
-kirjattaessa. Jos kohde on yli 50 m päässä kirjatusta sijainnista, poistoa **ei
-tehdä** ja ajo varoittaa. Hiljaa katoava invapaikka on pahin mahdollinen
-vikatyyppi tässä sovelluksessa.
+vaihtua ajojen välillä, jolloin sama uid osoittaa eri kohteeseen kuin korjausta
+kirjattaessa. Jos kohde on yli 50 m päässä kirjatusta sijainnista, korjausta
+**ei tehdä** ja ajo varoittaa. Hiljaa katoava tai siirtyvä invapaikka on pahin
+mahdollinen vikatyyppi tässä sovelluksessa.
 
-Poisto on viimeinen askel putkessa ja ohittaa kaiken automatiikan.
+Korjaukset ovat putken viimeinen askel ja ohittavat kaiken automatiikan.
 
 ### Moderointi ei ole portti
 
