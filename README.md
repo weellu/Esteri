@@ -219,6 +219,13 @@ Seuranta on **vain etualalla**: `NSLocationWhenInUseUsageDescription` ja
 `ACCESS_FINE_LOCATION` riittävät, taustalupia ja Androidin foreground serviceä
 ei tarvita. Virta peruutetaan näkymän tuhoutuessa, joten GPS ei jää päälle.
 
+Tämän pitämiseksi totena myös binäärissä `ios/Podfile` kääntää geolocatorin
+lipulla `BYPASS_PERMISSION_LOCATION_ALWAYS=1`. Ilman sitä pluginin koodiin jää
+viittaus `requestAlwaysAuthorization`iin, jota ajossa ei koskaan saavuteta —
+mutta App Store lukee symbolit eikä suoritusta, ja vaatii siksi
+taustapaikannuksen selitetekstin (ITMS-90683). Teksti kuvaisi käyttöä, jota ei
+ole, joten viittaus poistetaan sen sijaan että se selitettäisiin.
+
 Päivitysten suodatin on 5 metriä. Ilman suodatinta paikallaan seisova laite
 tuottaisi päivitysvirran pelkästä mittauksen heittelystä ja kartta nykisi
 jatkuvasti.

@@ -39,5 +39,24 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
+    # Geolocatorin PermissionHandler viittaa requestAlwaysAuthorization-
+    # rajapintaan, vaikka se ei ajossa koskaan päädy sinne: haara on
+    # `else if`, ja NSLocationWhenInUseUsageDescription vie aina
+    # ensimmäiseen haaraan. Apple ei kuitenkaan aja koodia vaan lukee
+    # binäärin symbolit, ja vaatii siksi taustapaikannuksen selitetekstin
+    # (ITMS-90683).
+    #
+    # Selitetekstin lisääminen kuvaisi käyttöä, jota ei ole. Tämä lippu
+    # poistaa viittauksen käännösvaiheessa, jolloin sovellus vastaa myös
+    # binääriltään sitä mitä se tekee: paikannus vain etualalla.
+    if target.name == 'geolocator_apple'
+      target.build_configurations.each do |config|
+        defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
+        defs = [defs] if defs.is_a?(String)
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] =
+          defs + ['BYPASS_PERMISSION_LOCATION_ALWAYS=1']
+      end
+    end
   end
 end
