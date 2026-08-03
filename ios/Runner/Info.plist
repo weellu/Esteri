@@ -6,6 +6,8 @@
 	<string>Sijaintia käytetään oman paikkasi näyttämiseen kartalla, ja se lähetetään mukana, kun ilmoitat uuden invapaikan tai vahvistat olemassa olevan.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Esteri</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
