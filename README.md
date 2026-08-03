@@ -197,6 +197,17 @@ CRS84:n ja EPSG:4326:n sekaannus ei voi sijoittaa tulosta hiljaisesti väärin.
 
 ### Sijainnin seuranta
 
+**Paikannus käynnistyy itsestään** sovelluksen avautuessa. Kartta ilman omaa
+sijaintia on pysäköintipaikkaa etsivälle lähes hyödytön, ja napin painaminen
+joka käynnistyksellä olisi ylimääräinen este juuri sille käyttäjäkunnalle,
+jolle sovellus on tehty.
+
+Automaattikäynnistys **epäonnistuu hiljaa**: jos lupa puuttuu tai
+sijaintipalvelut ovat pois päältä, mitään ei kerrota. Käyttäjä ei pyytänyt
+paikannusta, joten käynnistyksen yhteydessä näytetty virhe olisi hänelle
+pelkkää kohinaa. Syyn saa silti kuulla — painikkeen painallus on käyttäjän oma
+pyyntö, ja siihen vastataan.
+
 Sijaintipainike kiertää kolme tilaa:
 
 | Tila | Sijaintipiste | Kartta |
@@ -204,6 +215,8 @@ Sijaintipainike kiertää kolme tilaa:
 | Pois | ei näy, GPS sammutettu | — |
 | Seuraa | päivittyy | siirtyy sijainnin mukana |
 | Elävä | päivittyy | pysyy paikallaan |
+
+Alkutila on **Seuraa**, ei Pois.
 
 Kartan raahaus pudottaa seurannan eläväksi mutta **ei sammuta paikannusta**:
 liikkeellä olevan on voitava selata karttaa ilman että se nykii takaisin, mutta

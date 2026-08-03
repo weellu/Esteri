@@ -172,9 +172,11 @@ void main() {
   });
 
   group('sijainnin seuranta', () {
-    testWidgets('painike keskittää kartan ensimmäiseen sijaintiin', (
+    testWidgets('paikannus käynnistyy itsestään ja kartta keskittyy', (
       tester,
     ) async {
+      // Nappia ei paineta: kartta ilman omaa sijaintia on pysäköintipaikkaa
+      // etsivälle lähes hyödytön, joten seuranta alkaa käynnistyksestä.
       final repo = FakeSpotRepository([]);
       final location = FakeLocationService(first: helsinki);
       await pumpMap(
@@ -184,18 +186,47 @@ void main() {
         locationService: location,
       );
 
-      await tapTracking(tester);
-
       expect(
         location.subscriptions,
         1,
-        reason: 'paikannuksen pitää käynnistyä',
+        reason: 'paikannuksen pitää käynnistyä ilman käyttäjän toimia',
       );
       expect(userDot(tester), helsinki);
       expect(
         boundsContain(repo.requestedBounds.last, helsinki),
         isTrue,
         reason: 'kartan pitää siirtyä sijaintiin',
+      );
+      expect(find.byTooltip('Lopeta sijainnin seuranta'), findsOneWidget);
+    });
+
+    testWidgets('automaattikäynnistys ei valita puuttuvasta luvasta', (
+      tester,
+    ) async {
+      // Käyttäjä ei pyytänyt paikannusta, joten käynnistyksen yhteydessä
+      // näytetty virhe olisi hänelle pelkkää kohinaa. Syyn saa kuulla vasta
+      // kun hän itse painaa nappia.
+      final location = FakeLocationService(
+        denial: LocationDenial.permissionDeniedForever,
+      );
+      await pumpMap(
+        tester,
+        FakeSpotRepository([]),
+        await fakeKeyStore(),
+        locationService: location,
+      );
+
+      expect(location.subscriptions, 0);
+      expect(find.byType(SnackBar), findsNothing);
+
+      await tapTracking(tester);
+
+      expect(
+        find.text(
+          'Sijaintilupa on estetty. Salli sijainti laitteen asetuksista.',
+        ),
+        findsOneWidget,
+        reason: 'painallus on käyttäjän oma pyyntö, ja siihen pitää vastata',
       );
     });
 
@@ -210,7 +241,6 @@ void main() {
         await fakeKeyStore(),
         locationService: location,
       );
-      await tapTracking(tester);
 
       location.emit(oulu);
       await settle(tester);
@@ -236,7 +266,6 @@ void main() {
           await fakeKeyStore(),
           locationService: location,
         );
-        await tapTracking(tester);
 
         await tester.drag(find.byType(FlutterMap), const Offset(-200, -200));
         await settle(tester);
@@ -264,7 +293,7 @@ void main() {
         await fakeKeyStore(),
         locationService: location,
       );
-      await tapTracking(tester);
+      // Seuranta on jo päällä automaattisesti, joten yksi painallus sammuttaa.
       await tapTracking(tester);
 
       expect(
@@ -274,30 +303,6 @@ void main() {
       );
       expect(find.byType(CircleLayer), findsNothing);
       expect(find.byTooltip('Näytä oma sijainti'), findsOneWidget);
-    });
-
-    testWidgets('evätty lupa kerrotaan eikä paikannusta aloiteta', (
-      tester,
-    ) async {
-      final location = FakeLocationService(
-        denial: LocationDenial.permissionDeniedForever,
-      );
-      await pumpMap(
-        tester,
-        FakeSpotRepository([]),
-        await fakeKeyStore(),
-        locationService: location,
-      );
-
-      await tapTracking(tester);
-
-      expect(location.subscriptions, 0);
-      expect(
-        find.text(
-          'Sijaintilupa on estetty. Salli sijainti laitteen asetuksista.',
-        ),
-        findsOneWidget,
-      );
     });
 
     testWidgets('sijaintivirta katkeaa: seuranta pysähtyy ja siitä kerrotaan', (
@@ -310,7 +315,6 @@ void main() {
         await fakeKeyStore(),
         locationService: location,
       );
-      await tapTracking(tester);
 
       location.fail(Exception('paikannin sammui'));
       await settle(tester);
@@ -321,6 +325,8 @@ void main() {
 
     testWidgets('näkymän sulkeminen peruuttaa paikannuksen', (tester) async {
       // Ilman tätä GPS jäisi päälle näkymän tuhouduttua ja söisi akkua.
+      // Automaattikäynnistys tekee tästä aiempaa tärkeämpää: paikannus on
+      // päällä myös silloin, kun käyttäjä ei ole sitä itse pyytänyt.
       final location = FakeLocationService(first: helsinki);
       await pumpMap(
         tester,
@@ -328,7 +334,6 @@ void main() {
         await fakeKeyStore(),
         locationService: location,
       );
-      await tapTracking(tester);
 
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));
       await tester.pumpAndSettle();

@@ -97,6 +97,31 @@ class _MapScreenState extends State<MapScreen> {
     // kun hän painoi nappia, eikä myöhempi ilmoitus liity mihinkään, mitä hän
     // on juuri tekemässä.
     if (_canContribute) unawaited(widget.contributions!.flushPending());
+
+    // Sijainti käynnistetään itsestään. Kartta ilman omaa sijaintia on
+    // pysäköintipaikkaa etsivälle lähes hyödytön, ja napin painaminen joka
+    // käynnistyksellä on ylimääräinen este juuri sille käyttäjäkunnalle,
+    // jolle sovellus on tehty.
+    //
+    // Vasta ensimmäisen kehyksen jälkeen kahdesta syystä: ScaffoldMessengerin
+    // kaltaisia inherited widgetejä ei saa hakea initStatessa, eikä karttaa
+    // voi siirtää ennen kuin se on asemoitu.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_autoStartTracking());
+    });
+  }
+
+  /// Automaattinen käynnistys epäonnistuu hiljaa.
+  ///
+  /// Käyttäjä ei pyytänyt tätä, joten käynnistyksen yhteydessä näytetty
+  /// virheilmoitus olisi hänelle pelkkää kohinaa. Syyn saa silti kuulla:
+  /// painikkeen painallus kertoo sen, jos hän itse pyytää sijaintia.
+  Future<void> _autoStartTracking() async {
+    try {
+      await _startTracking(silent: true);
+    } on Exception catch (error) {
+      debugPrint('Sijainnin automaattinen käynnistys ei onnistunut: $error');
+    }
   }
 
   @override
@@ -202,13 +227,17 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  Future<void> _startTracking() async {
+  /// [silent] vaientaa esteestä kertovan ilmoituksen. Sitä käytetään vain
+  /// automaattikäynnistyksessä.
+  Future<void> _startTracking({bool silent = false}) async {
     final messenger = ScaffoldMessenger.of(context);
 
     final denial = await _location.ensureAvailable();
     if (!mounted) return;
     if (denial != null) {
-      messenger.showSnackBar(SnackBar(content: Text(_denialMessage(denial))));
+      if (!silent) {
+        messenger.showSnackBar(SnackBar(content: Text(_denialMessage(denial))));
+      }
       return;
     }
 
