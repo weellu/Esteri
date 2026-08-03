@@ -15,6 +15,7 @@ ei dokumentaatiosta.
 | Digiroad liikennemerkit, lisäkilpi H12.7 | 253 | Liikennemerkki (piste) | Käytössä, harva |
 | Espoo `GIS:Liikennemerkit` | ? | Liikennemerkki | **401 — ei avointa pääsyä** |
 | Oulu `gis:liikennemerkit` | ? | Liikennemerkki | **401 — ei avointa pääsyä** |
+| Seinäjoki | 0 | — | **Ei rajapintaa, ks. alla** |
 
 Vantaalla, Jyväskylässä, Lahdessa, Porissa, Vaasassa ja Hämeenlinnassa ei ole
 WFS-tasoa invapaikoille.
@@ -106,6 +107,35 @@ mutta GetFeature palauttaa **HTTP 401**. Aineisto ei ole avointa.
 
 Kannattaa kysyä kaupungeilta avointa pääsyä — skeeman perusteella data on olemassa
 ja H12.7 löytyisi suoraan koodikentästä.
+
+## Seinäjoki — ei aineistoa (tarkistettu 3.8.2026)
+
+Toisin kuin Espoossa ja Oulussa, tässä ei ole 401:n takana odottavaa valmista
+aineistoa. Dataa ei näytä olevan olemassa avoimessa muodossa lainkaan.
+
+Varmistettuja umpikujia — älä etsi näitä uudelleen:
+- WFS `https://kartat.seinajoki.fi/teklaogcweb/wfs.ashx` **vastaa 200**, mutta
+  tarjoaa vain viisi tasoa: `kanta:Rakennus`, `rakval:ValmisRakennus`,
+  `mkos:Osoite`, `sjkkaupunki:PohjakarttaValmis`,
+  `sjkkaupunki:AsemakaavoitettuAlue`. Ei pysäköintiä, ei liikennemerkkejä.
+- Tekla-vakionimet `GIS:Liikennemerkit`, `gis:liikennemerkit` ja
+  `sjkkaupunki:Liikennemerkit` palauttavat `TYPENAME not found` — piilotettua
+  tasoa ei ole. Kaupunki itsekin ilmoittaa, ettei sillä ole jatkuvassa
+  ylläpidossa olevia WFS-rajapintoja.
+- WMS (17 tasoa) on pelkkää taustakarttaa, kaavoja ja ilmakuvia. Rasteria
+  muutenkin — pisteitä ei saisi ulos vaikka taso olisi.
+- Digiroadissa **0 invamerkkiä** kuntakoodilla 743. Seinäjoki ei ole niiden 37
+  kunnan joukossa, joista H12.7-merkkejä löytyy.
+- Seipark Oy (kaupungin oma pysäköintiyhtiö) kertoo verkkosivullaan
+  invatunnuksen oikeuksista mutta ei julkaise paikkalistaa eikä rajapintaa.
+
+Aineistossa on Seinäjoen seudulla 9 kohdetta, kaikki OSM:stä (6 `space`,
+3 `area`). Se on selvästi alikartoitettu ~65 000 asukkaan kaupungiksi.
+
+Etenemistavat: kysy kaupungilta (`karttapalvelut@seinajoki.fi`) onko
+liikennemerkkirekisteriä ylipäätään olemassa, ja Seiparkilta heidän omista
+alueistaan. Toinen reitti on OSM-kartoitus — ainoa, joka ei vaadi kenenkään
+lupaa.
 
 ## Datan laatu — mitä käyttöliittymän pitää kertoa
 
