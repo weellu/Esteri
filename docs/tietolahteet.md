@@ -16,6 +16,7 @@ ei dokumentaatiosta.
 | Espoo `GIS:Liikennemerkit` | ? | Liikennemerkki | **401 — ei avointa pääsyä** |
 | Oulu `gis:liikennemerkit` | ? | Liikennemerkki | **401 — ei avointa pääsyä** |
 | Seinäjoki | 0 | — | **Ei rajapintaa, ks. alla** |
+| Kangasala `kangasala.sde.PYSAKOINTI` | 1 | Alue, vapaa teksti | **Ei koodattua kenttää, ks. alla** |
 
 Vantaalla, Jyväskylässä, Lahdessa, Porissa, Vaasassa ja Hämeenlinnassa ei ole
 WFS-tasoa invapaikoille.
@@ -136,6 +137,54 @@ Etenemistavat: kysy kaupungilta (`karttapalvelut@seinajoki.fi`) onko
 liikennemerkkirekisteriä ylipäätään olemassa, ja Seiparkilta heidän omista
 alueistaan. Toinen reitti on OSM-kartoitus — ainoa, joka ei vaadi kenenkään
 lupaa.
+
+## Kangasala — rajapinta on, koodattua kenttää ei (tarkistettu 3.8.2026)
+
+Kangasala eroaa sekä Espoosta ja Oulusta (aineisto on, pääsy puuttuu) että
+Seinäjoesta (ei aineistoa lainkaan): **pääsy on avoin ja pysäköintiaineisto on
+olemassa, mutta esteettömyys ei ole siinä koodattuna kenttänä.**
+
+Palvelu on Pirkanmaan yhteinen ArcGIS, ei kunnan oma:
+`https://paikkatietopalvelu.pirnet.fi/arcgis/rest/services/kangasala/`
+Ei tunnistautumista. 22 palvelua, joista pysäköintiä koskee
+`liikenne_ja_kadut/MapServer/0` = `kangasala.sde.PYSAKOINTI`. Sama taso on
+myös nimellä `Pysäköinti` palvelussa `kangasala_aineistot_public`.
+
+Taso on pistemäinen ja siinä on 125 kohdetta. Kentät ovat `alue`, `lisakilpi`,
+`kiekko` ja `rajoitus`. Näistä `lisakilpi` on **vapaata tekstiä**, ei
+merkkikoodia: arvoja ovat mm. "7-17, 2 h", "Erikoislupa 7-17" ja
+"Latauspaikka, 4 h".
+
+Koko aineiston 125 kohteesta **tasan yksi** viittaa invapaikkaan:
+
+```
+objectid 33 | alue "Ainontien P-alue" | lisakilpi "5 h, Invapysäköinti 2 ap"
+61.463572, 24.068562
+```
+
+Lähdemoduulia ei kannata kirjoittaa yhden kohteen takia. Vapaan tekstin
+jäsentäminen olisi lisäksi hauras: yksi kirjoitusasu tänään ei lupaa mitään
+huomisesta, eikä rikkoutumista huomaisi mitenkään — taso vain lakkaisi
+tuottamasta osumia.
+
+Kangasalan keskustassa ei ole yhtään kohdetta nykyisessä aineistossa; lähin on
+noin 11 km päässä Tampereen puolella. Oikea reitti tälle kunnalle on siis
+**käyttäjien ilmoitukset ja OSM**, ei lähdemoduuli. Yllä oleva piste kannattaa
+lisätä OSM:ään, jolloin se tulee mukaan seuraavassa ajossa ilman uutta koodia.
+
+Jos Kangasala joskus koodaa esteettömyyden omaksi kentäkseen, taso ja polku
+ovat tässä valmiina eikä selvitystä tarvitse tehdä uudelleen.
+
+### Digiroadin kuntakoodi on merkkijono
+
+Kangasalta ei löydy Digiroadista yhtään H12.7-merkkiä. Varmistettu hakemalla
+kaikki 253 H12.7-merkkiä ja ryhmittelemällä ne kunnittain: merkkejä on 37
+kunnassa, eikä kuntakoodi 211 ole niiden joukossa.
+
+Huomaa suodattimen ansa: `CQL_FILTER=...AND kuntakoodi=211` palauttaa nollan
+**myös Tampereelle ja Turulle**, koska `kuntakoodi` on merkkijonokenttä eikä
+numeerinen vertailu osu. Nollatulos ei siis yksinään todista mitään — ryhmittele
+tulokset itse tai lainaa arvo hipsuihin.
 
 ## Datan laatu — mitä käyttöliittymän pitää kertoa
 
