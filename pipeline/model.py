@@ -32,6 +32,28 @@ VERIFICATION_CONFIRMED = "confirmed"  # useampi laite vahvistanut paikan pääll
 
 _VERIFICATIONS = (None, VERIFICATION_REPORTED, VERIFICATION_CONFIRMED)
 
+# Montako viimeisintä ruutumäärää otetaan mediaaniin. Kaikkien aikojen mediaani
+# jumittaisi vanhaan lukemaan: jos ruutuja maalataan yksi pois, kymmenen vanhaa
+# ilmoitusta pitäisi tuloksen ennallaan vuosiksi. Ikkuna päästää todellisen
+# muutoksen läpi viidessä käynnissä, mutta yksittäinen väärin laskenut ei riitä
+# kääntämään sitä.
+CAPACITY_WINDOW = 5
+
+
+def median_capacity(values: list[int]) -> Optional[int]:
+    """Ruutumäärä ilmoitusten enemmistön mukaan, tai None jos ei tietoa.
+
+    Parillisella määrällä otetaan alempi keskiluku: kahden ja kolmen ruudun
+    välillä luvataan kaksi. Sama varovaisuus kuin muuallakin — käyttäjä pettyy
+    vähemmän löytäessään enemmän kuin luvattiin.
+    """
+    usable = [int(v) for v in values[-CAPACITY_WINDOW:] if isinstance(v, int) and v > 0]
+    if not usable:
+        return None
+    usable.sort()
+    return usable[(len(usable) - 1) // 2]
+
+
 # Lähteen luotettavuus metatiedoissa. Kuntien omat rekisterit ovat tarkempia
 # ja tuoreempia kuin OSM; Digiroadissa on lähinnä merkin olemassaolo.
 #

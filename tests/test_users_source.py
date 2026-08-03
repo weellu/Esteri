@@ -3,11 +3,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from pipeline.signals import apply_signals
 from pipeline.model import (
     PRECISION_AREA,
     PRECISION_SPACE,
     VERIFICATION_CONFIRMED,
     VERIFICATION_REPORTED,
+    ParkingSpot,
+    median_capacity,
 )
 from pipeline.sources import users
 
@@ -115,6 +118,73 @@ class UsersAuthorityTest(unittest.TestCase):
         self.assertEqual(merged[0].source, "tampere")
         self.assertEqual(merged[0].capacity, 3)
         self.assertIsNone(merged[0].verification)
+
+
+
+class CapacityMedianTest(unittest.TestCase):
+    """Ruutumäärä on ilmoittajien enemmistön näkemys."""
+
+    def test_yksi_ilmoitus_kelpaa_sellaisenaan(self):
+        self.assertEqual(median_capacity([3]), 3)
+
+    def test_yksi_vaarin_laskenut_ei_siirra_tulosta(self):
+        self.assertEqual(median_capacity([3, 3, 2]), 3)
+
+    def test_parillisella_maaralla_luvataan_vahempi(self):
+        # Käyttäjä pettyy vähemmän löytäessään enemmän kuin luvattiin.
+        self.assertEqual(median_capacity([2, 3]), 2)
+
+    def test_todellinen_muutos_menee_lapi_ikkunan_verran(self):
+        # Ruutuja maalattiin yksi pois: viisi tuoretta havaintoa riittää,
+        # vaikka vanhoja olisi enemmän.
+        self.assertEqual(median_capacity([3] * 6 + [2] * 5), 2)
+
+    def test_ei_havaintoja_tarkoittaa_ei_tietoa(self):
+        self.assertIsNone(median_capacity([]))
+
+    def test_roska_ei_kaada_eika_kelpaa(self):
+        self.assertIsNone(median_capacity([0, -1, "kolme", None]))
+
+
+class CapacityFromReportsTest(unittest.TestCase):
+    def test_ilmoitettu_maara_paatyy_kohteeseen(self):
+        spots = users.load(write([feature(reports=3, capacities=[3, 3, 2])]))
+        self.assertEqual(spots[0].capacity, 3)
+
+    def test_ilman_maaraa_kentta_jaa_tyhjaksi(self):
+        spots = users.load(write([feature(reports=1)]))
+        self.assertIsNone(spots[0].capacity)
+
+
+class SignalCapacityTest(unittest.TestCase):
+    """Maastohavainnon ja rekisterin suhde."""
+
+    def spot(self, capacity=None):
+        return ParkingSpot(
+            source="tampere",
+            source_id="1",
+            lat=61.498,
+            lon=23.761,
+            precision=PRECISION_AREA,
+            capacity=capacity,
+        )
+
+    def test_yksi_havainto_tayttaa_tyhjan_kentan(self):
+        spot = self.spot(capacity=None)
+        apply_signals([spot], {"tampere:1": {"present": 1, "capacities": [2]}})
+        self.assertEqual(spot.capacity, 2)
+
+    def test_yksi_havainto_ei_ylikirjoita_rekisteria(self):
+        # Ohikulkija voi olla väärässä. Rekisterin kumoaminen yhden napautuksen
+        # perusteella olisi huonompi vaihtokauppa kuin odottaa toista.
+        spot = self.spot(capacity=4)
+        apply_signals([spot], {"tampere:1": {"present": 1, "capacities": [2]}})
+        self.assertEqual(spot.capacity, 4)
+
+    def test_kaksi_havaintoa_voittaa_rekisterin(self):
+        spot = self.spot(capacity=4)
+        apply_signals([spot], {"tampere:1": {"present": 2, "capacities": [2, 2]}})
+        self.assertEqual(spot.capacity, 2)
 
 
 if __name__ == "__main__":

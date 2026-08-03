@@ -57,6 +57,7 @@ class _AddSpotSheetState extends State<AddSpotSheet> {
   final TextEditingController _note = TextEditingController();
 
   PositionFix? _fix;
+  int? _capacity;
   bool _locating = true;
   bool _sending = false;
   String? _problem;
@@ -126,6 +127,7 @@ class _AddSpotSheetState extends State<AddSpotSheet> {
         lat: fix.position.latitude,
         lon: fix.position.longitude,
         accuracyM: fix.accuracyM,
+        capacity: _capacity,
         note: _note.text.trim(),
       ),
     );
@@ -183,6 +185,13 @@ class _AddSpotSheetState extends State<AddSpotSheet> {
                 )
               else
                 _LocationStatus(fix: fix, problem: _problem, onRetry: _locate),
+
+              const SizedBox(height: 16),
+              CapacityPicker(
+                value: _capacity,
+                onChanged: (v) => setState(() => _capacity = v),
+                enabled: !_sending,
+              ),
 
               const SizedBox(height: 16),
               TextField(

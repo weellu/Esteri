@@ -335,6 +335,27 @@ muuttaa ilman uutta deployta.
 | Kolmas eri laite samasta kohdasta | Nousee vahvistetuksi | ei |
 | Muu uusi paikka | Julkaistaan `reported`-tilassa | katselmointi |
 
+### Ruutujen määrä
+
+Ilmoitukseen voi liittää invaruutujen määrän. Se on vapaaehtoinen: arvaus
+näyttäisi kartalla tiedolta, jota kukaan ei ole antanut.
+
+Määrä kelpaa myös **vahvistukseen**, ja se on samalla ainoa tapa korjata luku
+jälkikäteen. Erillistä korjausnappia ei ole, koska "paikka on olemassa" ja
+"täällä on kaksi ruutua eikä kolme" ovat paikan päällä sama ele. Ruutuja
+maalataan lisää ja pois, ja ensimmäinen laskija voi laskea väärin.
+
+Julkaistava luku on **mediaani viidestä viimeisimmästä** havainnosta. Kaikkien
+aikojen mediaani jumittaisi vanhaan lukemaan: kymmenen vanhaa ilmoitusta
+pitäisi tuloksen ennallaan vuosiksi, vaikka ruutu olisi maalattu pois. Ikkuna
+päästää todellisen muutoksen läpi viidessä käynnissä, mutta yksittäinen väärin
+laskenut ei riitä kääntämään sitä. Parillisella määrällä otetaan alempi
+keskiluku — käyttäjä pettyy vähemmän löytäessään enemmän kuin luvattiin.
+
+Avoimen aineiston kohteessa maastohavainto voittaa rekisterin vasta **kahdella**
+havainnolla. Kunnan aineisto voi olla vanhentunut, mutta yksi ohikulkija voi
+olla yksinkertaisesti väärässä. Tyhjään kenttään yksikin havainto on parannus.
+
 ### Moderointi ei ole portti
 
 Yksittäinen ilmoitus julkaistaan heti vahvistamattomana, ja sovellus esittää

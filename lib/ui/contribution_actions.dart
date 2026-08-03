@@ -96,6 +96,7 @@ class ContributionActions extends StatefulWidget {
 
 class _ContributionActionsState extends State<ContributionActions> {
   bool _busy = false;
+  int? _capacity;
   late bool _done = widget.contributions.hasActedOn(widget.spot.uid);
 
   Future<void> _send(bool present) async {
@@ -111,6 +112,9 @@ class _ContributionActionsState extends State<ContributionActions> {
           lon: fix.position.longitude,
           accuracyM: fix.accuracyM,
           targetUid: widget.spot.uid,
+          // Määrä kuuluu vain vahvistukseen. Kiisto sanoo ettei paikkaa ole,
+          // eikä olemattomalla paikalla ole ruutuja.
+          capacity: present ? _capacity : null,
         ),
       );
       if (!mounted) return;
@@ -160,7 +164,16 @@ class _ContributionActionsState extends State<ContributionActions> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Oletko paikan päällä?', style: theme.textTheme.titleSmall),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          // Määrää ei esitäytetä nykyisellä tiedolla. Esitäytettynä pelkkä
+          // vahvistuksen napautus kirjaisi lukeman, jota käyttäjä ei ole
+          // katsonut — ja se painaisi mediaania kohti vanhaa arvoa.
+          CapacityPicker(
+            value: _capacity,
+            onChanged: (v) => setState(() => _capacity = v),
+            enabled: !_busy,
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -188,6 +201,65 @@ class _ContributionActionsState extends State<ContributionActions> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Invaruutujen määrän valinta.
+///
+/// Sirut eikä numerokenttä: ilmoitus tehdään autossa istuen, usein kehnossa
+/// säässä ja kiireessä, eikä näppäimistön availu ole silloin oikea vaatimus.
+/// Yläraja on `6+`, koska tarkempi luku ei ole yhden napautuksen arvoinen —
+/// suuria alueita on vähän, ja niissä määrä tulee joka tapauksessa kunnan
+/// omasta aineistosta.
+///
+/// Valinnan voi jättää tekemättä. Tietomallissa `capacity` on valinnainen, ja
+/// arvaus olisi huonompi kuin tyhjä: se näyttäisi kartalla tiedolta.
+class CapacityPicker extends StatelessWidget {
+  const CapacityPicker({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  final int? value;
+  final ValueChanged<int?> onChanged;
+  final bool enabled;
+
+  /// `6` tarkoittaa "kuusi tai enemmän". Tarkkaa lukua ei kysytä.
+  static const int manyThreshold = 6;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Montako invaruutua tässä on?', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: [
+            for (final n in [1, 2, 3, 4, 5, manyThreshold])
+              ChoiceChip(
+                label: Text(n == manyThreshold ? '6+' : '$n'),
+                selected: value == n,
+                // Uudelleenvalinta poistaa valinnan: väärin osunutta
+                // napautusta ei saisi muuten peruttua ilman lomakkeen
+                // sulkemista.
+                onSelected: enabled ? (on) => onChanged(on ? n : null) : null,
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Valinnainen. Jätä tyhjäksi, jos et ole varma.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -121,10 +121,20 @@ def _features(contributions: dict[str, Any]) -> list[dict[str, Any]]:
     return contributions.setdefault("features", [])
 
 
-def _bump_signal(state: dict[str, Any], uid: str, key: str, when: str) -> None:
+def _bump_signal(
+    state: dict[str, Any],
+    uid: str,
+    key: str,
+    when: str,
+    capacity: Optional[int] = None,
+) -> None:
     signal = state["signals"].setdefault(uid, {"present": 0, "missing": 0})
     signal[key] = int(signal.get(key, 0)) + 1
     signal["last"] = when
+    # Ruutumäärät kertyvät listaksi eikä yhdeksi arvoksi: mediaani tarvitsee
+    # havainnot, ja lista näyttää PR-diffissä suoraan, mihin luku perustuu.
+    if capacity is not None:
+        signal.setdefault("capacities", []).append(int(capacity))
 
 
 def _next_id(features: list[dict[str, Any]]) -> str:
@@ -191,6 +201,8 @@ def moderate(
         lon = float(submission["lon"])
         when = str(submission.get("created_at", ""))[:10]
         kind = submission["kind"]
+        capacity = submission.get("capacity")
+        capacity = int(capacity) if isinstance(capacity, int) and capacity > 0 else None
 
         if kind in (KIND_PRESENT, KIND_MISSING):
             uid = str(submission["target_uid"])
@@ -205,7 +217,13 @@ def moderate(
             # Tuntematon uid hyväksytään silti: kohde voi olla käyttäjän
             # aineistoversiossa mutta pudonnut tästä ajosta, ja signaali
             # kelpaa taas kun se palaa. Etäisyyttä ei silloin voi tarkistaa.
-            _bump_signal(state, uid, "present" if kind == KIND_PRESENT else "missing", when)
+            _bump_signal(
+                state,
+                uid,
+                "present" if kind == KIND_PRESENT else "missing",
+                when,
+                capacity=capacity,
+            )
             if kind == KIND_PRESENT:
                 result.confirmations += 1
             else:
@@ -217,7 +235,7 @@ def moderate(
         if nearest_uid is not None and distance <= EXISTING_RADIUS_M:
             # Käyttäjä on jo tunnetun kohteen kohdalla. Arvokkaampaa kirjata
             # tämä vahvistuksena kuin luoda kilpaileva duplikaatti.
-            _bump_signal(state, nearest_uid, "present", when)
+            _bump_signal(state, nearest_uid, "present", when, capacity=capacity)
             result.confirmations += 1
             continue
 
@@ -244,6 +262,8 @@ def moderate(
             coords[1] = round((coords[1] * reports + lat) / (reports + 1), 7)
             props["reports"] = reports + 1
             props["last_seen"] = when
+            if capacity is not None:
+                props.setdefault("capacities", []).append(capacity)
             entry = {
                 "id": props["id"],
                 "lat": coords[1],
@@ -268,6 +288,7 @@ def moderate(
                     "reports": 1,
                     "first_seen": when,
                     "last_seen": when,
+                    **({"capacities": [capacity]} if capacity is not None else {}),
                 },
             }
         )

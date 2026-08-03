@@ -13,7 +13,9 @@ LAT, LON = 61.4980, 23.7610
 METER = 1 / 111_000
 
 
-def submission(sid, kind, *, lat=LAT, lon=LON, target=None, note=None, accuracy=8.0):
+def submission(
+    sid, kind, *, lat=LAT, lon=LON, target=None, note=None, accuracy=8.0, capacity=None
+):
     return {
         "id": sid,
         "kind": kind,
@@ -22,6 +24,7 @@ def submission(sid, kind, *, lat=LAT, lon=LON, target=None, note=None, accuracy=
         "target_uid": target,
         "note": note,
         "accuracy_m": accuracy,
+        "capacity": capacity,
         "created_at": "2026-08-03T10:00:00Z",
     }
 
@@ -278,3 +281,74 @@ class SignalApplicationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CapacityTest(unittest.TestCase):
+    """Ruutumäärä: uusi paikka, korjaus ja mediaani."""
+
+    def test_uusi_ilmoitus_kirjaa_ruutumaaran(self):
+        contributions = empty_contributions()
+        moderate(
+            [submission(1, "new", capacity=3)],
+            dataset=[],
+            contributions=contributions,
+            state=empty_state(),
+        )
+        props = contributions["features"][0]["properties"]
+        self.assertEqual(props["capacities"], [3])
+
+    def test_ilman_maaraa_kenttaa_ei_synny(self):
+        # Tyhjä lista ja "ei tietoa" ovat eri asioita vain siinä, että
+        # edellinen turvottaisi tiedostoa ilman sisältöä.
+        contributions = empty_contributions()
+        moderate(
+            [submission(1, "new")],
+            dataset=[],
+            contributions=contributions,
+            state=empty_state(),
+        )
+        self.assertNotIn("capacities", contributions["features"][0]["properties"])
+
+    def test_sama_paikka_uudelleen_kerryttaa_maarat(self):
+        contributions = empty_contributions()
+        state = empty_state()
+        for sid, cap in [(1, 3), (2, 3), (3, 2)]:
+            moderate(
+                [submission(sid, "new", lat=LAT + sid * METER, capacity=cap)],
+                dataset=[],
+                contributions=contributions,
+                state=state,
+            )
+        props = contributions["features"][0]["properties"]
+        self.assertEqual(props["capacities"], [3, 3, 2])
+
+    def test_vahvistus_kirjaa_maaran_signaaliin(self):
+        # Tämä on korjausreitti: "Paikka on" kertoo samalla montako ruutua on.
+        state = empty_state()
+        moderate(
+            [submission(1, "present", target="osm:node/9", capacity=2)],
+            dataset=[("osm:node/9", LAT, LON)],
+            contributions=empty_contributions(),
+            state=state,
+        )
+        self.assertEqual(state["signals"]["osm:node/9"]["capacities"], [2])
+
+    def test_kiisto_ei_kirjaa_maaraa(self):
+        state = empty_state()
+        moderate(
+            [submission(1, "missing", target="osm:node/9")],
+            dataset=[("osm:node/9", LAT, LON)],
+            contributions=empty_contributions(),
+            state=state,
+        )
+        self.assertNotIn("capacities", state["signals"]["osm:node/9"])
+
+    def test_uusi_ilmoitus_tunnetun_paalla_kirjaa_maaran_vahvistuksena(self):
+        state = empty_state()
+        moderate(
+            [submission(1, "new", capacity=4)],
+            dataset=[("osm:node/9", LAT, LON)],
+            contributions=empty_contributions(),
+            state=state,
+        )
+        self.assertEqual(state["signals"]["osm:node/9"]["capacities"], [4])

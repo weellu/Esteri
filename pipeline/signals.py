@@ -19,7 +19,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .model import ParkingSpot
+from .model import ParkingSpot, median_capacity
 
 log = logging.getLogger(__name__)
 
@@ -66,6 +66,7 @@ def apply_signals(spots: list[ParkingSpot], signals: dict[str, Any]) -> tuple[in
     for spot in spots:
         present = 0
         missing = 0
+        capacities: list[int] = []
         hits: list[str] = []
         for uid in (spot.uid, *spot.merged_from):
             signal = signals.get(uid)
@@ -74,6 +75,7 @@ def apply_signals(spots: list[ParkingSpot], signals: dict[str, Any]) -> tuple[in
             hits.append(uid)
             present += int(signal.get("present", 0))
             missing += int(signal.get("missing", 0))
+            capacities.extend(signal.get("capacities") or [])
 
         if not hits:
             continue
@@ -85,6 +87,15 @@ def apply_signals(spots: list[ParkingSpot], signals: dict[str, Any]) -> tuple[in
         # viedä 2 787 kohteen tiedostoon turhaan.
         spot.confirmations = present or None
         spot.disputes = missing or None
+
+        # Maastohavainto voittaa rekisterin vasta kun havaintoja on kaksi.
+        # Kunnan aineisto voi olla vanhentunut, mutta yksi ohikulkija voi olla
+        # yksinkertaisesti väärässä — ja rekisterin ylikirjoittaminen yhden
+        # napautuksen perusteella olisi huonompi vaihtokauppa kuin odottaa
+        # toista. Tyhjään kenttään yksikin havainto on parannus.
+        reported = median_capacity(capacities)
+        if reported is not None and (len(capacities) >= 2 or spot.capacity is None):
+            spot.capacity = reported
 
     orphans = len(set(signals) - applied)
     if orphans:

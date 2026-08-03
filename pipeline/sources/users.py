@@ -36,6 +36,7 @@ from ..model import (
     VERIFICATION_CONFIRMED,
     VERIFICATION_REPORTED,
     ParkingSpot,
+    median_capacity,
 )
 
 log = logging.getLogger(__name__)
@@ -75,6 +76,9 @@ def _spot_from_feature(feature: dict[str, Any]) -> Optional[ParkingSpot]:
             precision=_precision_for(reports),
             verification=_verification_for(reports),
             confirmations=reports,
+            # Ruutumäärä on ilmoittajien enemmistön näkemys, ei viimeisimmän
+            # sana: yksi väärin laskenut ei saa siirtää lukua.
+            capacity=median_capacity(props.get("capacities") or []),
             # Vapaa teksti on moderoitu ennen tänne päätymistä. Ilmoituksen
             # mukana tullutta tekstiä ei julkaista koskaan sellaisenaan.
             name=props.get("name") or None,

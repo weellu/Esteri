@@ -49,6 +49,19 @@ wrangler secret put IP_SALT           # toinen satunnainen merkkijono
 wrangler deploy
 ```
 
+### Skeemamuutokset olemassa olevaan kantaan
+
+`schema.sql` käyttää `CREATE TABLE IF NOT EXISTS`, joten se **ei** muuta jo
+luotua taulua. Uusi sarake on lisättävä erikseen:
+
+```bash
+wrangler d1 execute esteri --remote \
+  --command "ALTER TABLE submissions ADD COLUMN capacity INTEGER"
+```
+
+Aja tämä kerran. Uusi kanta saa sarakkeen suoraan `schema.sql`:stä, joten
+komentoa ei tarvita puhtaalta pöydältä aloitettaessa.
+
 Kanta on jo luotu ja sen `database_id` on `wrangler.tomlissa`. Jos joudut
 luomaan sen uudelleen, kopioi `wrangler d1 create` -komennon tulosteesta **vain
 `database_id`** — komento ehdottaa bindingiksi kannan nimeä, mutta binding on
@@ -89,6 +102,7 @@ curl -X POST localhost:8787/v1/submissions -d '{
   "lat": 61.4980,
   "lon": 23.7610,
   "accuracy_m": 8.0,
+  "capacity": 3,
   "note": "P-talon 2. krs",
   "device": "<satunnainen UUID>",
   "app_version": "1.0.1"
@@ -100,6 +114,17 @@ curl -X POST localhost:8787/v1/submissions -d '{
 `400` — muotovirhe · `429` — vuorokauden raja täynnä
 
 `target_uid` vaaditaan vahvistuksissa, `note` huomioidaan vain lajilla `new`.
+
+`capacity` on invaruutujen määrä ilmoituskohdassa, 1–99, ja se on aina
+vapaaehtoinen — käyttäjää ei pakoteta arvaamaan. Se kelpaa lajeilla `new` ja
+`present`, ja `present` on nimenomaan se tapa korjata määrä jälkikäteen: ruutuja
+voidaan maalata lisää tai pois, ja ensimmäinen laskija on voinut laskea väärin.
+Lajilla `missing` se on virhe.
+
+Saman laitteen toisto samasta paikasta on edelleen `duplicate` eikä kasvata
+havaintojen määrää, mutta **annettu `capacity` päivittää olemassa olevan rivin.**
+Muuten käyttäjä ei voisi korjata omaa aiempaa lukemaansa: korjaus hylättäisiin
+hiljaa duplikaattina ja väärä määrä jäisi voimaan.
 
 ### `GET /v1/queue?since=<id>&limit=<n>`
 

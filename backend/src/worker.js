@@ -31,6 +31,9 @@ const LIMITS = {
 };
 
 const MAX_NOTE_LENGTH = 120;
+// Karkea järkevyysraja ruutumäärälle. Suurin tiedossa oleva yksittäinen
+// invapysäköintialue Suomessa on kymmeniä ruutuja, ei satoja.
+const MAX_CAPACITY = 99;
 const MAX_BODY_BYTES = 2048;
 
 // Lähetykset poistetaan puolen vuoden jälkeen. Ne on siihen mennessä viety
@@ -89,6 +92,14 @@ function validate(body) {
     }
   }
   if (body.note != null && typeof body.note !== 'string') return 'note ei ole merkkijono';
+  // Ruutujen määrä on vapaaehtoinen: käyttäjää ei pakoteta arvaamaan. Yläraja
+  // on karkea järkevyystarkistus, ei tieto todellisesta enimmäismäärästä.
+  if (body.capacity != null) {
+    if (!Number.isInteger(body.capacity) || body.capacity < 1 || body.capacity > MAX_CAPACITY) {
+      return 'capacity ei ole kelvollinen';
+    }
+    if (body.kind === 'missing') return 'capacity ei kuulu kiistoon';
+  }
   return null;
 }
 
@@ -186,16 +197,27 @@ async function handleSubmission(request, env) {
     // Ei virhe: sovelluksen offline-jono yrittää uudelleen, ja sama käyttäjä
     // voi vahvistaa saman paikan uudestaan myöhemmin. Kumpikaan ei ole uusi
     // riippumaton havainto, joten laskuri ei saa kasvaa.
-    await env.DB.prepare('UPDATE submissions SET created_at = ? WHERE id = ?')
-      .bind(new Date().toISOString(), duplicate)
-      .run();
+    //
+    // Ruutumäärä sen sijaan päivitetään, kun se on annettu. Muuten käyttäjä ei
+    // voisi korjata omaa aiempaa lukemaansa: toisto hylättäisiin hiljaa ja
+    // vanha virheellinen määrä jäisi voimaan. Havainto pysyy yhtenä, mutta se
+    // kertoo nyt sen, mitä paikalla oikeasti on.
+    if (body.capacity != null) {
+      await env.DB.prepare('UPDATE submissions SET created_at = ?, capacity = ? WHERE id = ?')
+        .bind(new Date().toISOString(), body.capacity, duplicate)
+        .run();
+    } else {
+      await env.DB.prepare('UPDATE submissions SET created_at = ? WHERE id = ?')
+        .bind(new Date().toISOString(), duplicate)
+        .run();
+    }
     return json({ status: 'duplicate' }, 202);
   }
 
   await env.DB.prepare(
     `INSERT INTO submissions
-       (kind, target_uid, lat, lon, accuracy_m, note, device, app_version, ip_hash, created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`
+       (kind, target_uid, lat, lon, accuracy_m, capacity, note, device, app_version, ip_hash, created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`
   )
     .bind(
       body.kind,
@@ -203,6 +225,7 @@ async function handleSubmission(request, env) {
       body.lat,
       body.lon,
       body.accuracy_m ?? null,
+      body.capacity ?? null,
       body.kind === 'new' ? cleanNote(body.note) : null,
       body.device,
       typeof body.app_version === 'string' ? body.app_version.slice(0, 20) : null,
@@ -234,7 +257,7 @@ async function handleQueue(request, env) {
   const limit = Math.min(Number.parseInt(url.searchParams.get('limit') ?? '1000', 10) || 1000, 5000);
 
   const { results } = await env.DB.prepare(
-    `SELECT id, kind, target_uid, lat, lon, accuracy_m, note, app_version, created_at
+    `SELECT id, kind, target_uid, lat, lon, accuracy_m, capacity, note, app_version, created_at
        FROM submissions WHERE id > ? ORDER BY id LIMIT ?`
   )
     .bind(since, limit)

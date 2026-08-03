@@ -35,6 +35,7 @@ class Submission {
     this.accuracyM,
     this.targetUid,
     this.note,
+    this.capacity,
   });
 
   final SubmissionKind kind;
@@ -44,6 +45,11 @@ class Submission {
   final String? targetUid;
   final String? note;
 
+  /// Invaruutujen määrä ilmoituskohdassa, tai null jos käyttäjä ei kertonut.
+  /// Kelpaa uudelle paikalle ja vahvistukselle — jälkimmäisellä se on korjaus,
+  /// kun määrä on muuttunut tai laskettu väärin.
+  final int? capacity;
+
   Map<String, Object?> toJson(String device) => {
     'kind': kind.wire,
     'lat': lat,
@@ -51,6 +57,7 @@ class Submission {
     if (accuracyM != null) 'accuracy_m': accuracyM,
     if (targetUid != null) 'target_uid': targetUid,
     if (note != null && note!.isNotEmpty) 'note': note,
+    if (capacity != null) 'capacity': capacity,
     'device': device,
     'app_version': Config.appVersion,
   };
@@ -70,6 +77,7 @@ class Submission {
       accuracyM: (json['accuracy_m'] as num?)?.toDouble(),
       targetUid: json['target_uid'] as String?,
       note: json['note'] as String?,
+      capacity: (json['capacity'] as num?)?.toInt(),
     );
   }
 }

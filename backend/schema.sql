@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS submissions (
   lat         REAL    NOT NULL,   -- lähettäjän oma sijainti
   lon         REAL    NOT NULL,
   accuracy_m  REAL,
+  -- Invaruutujen määrä ilmoituskohdassa. Vapaaehtoinen: arvausta ei kannata
+  -- pakottaa. Kelpaa lajeilla 'new' ja 'present' — jälkimmäisellä se on
+  -- korjaus, kun ruutujen määrä on muuttunut tai laskettu väärin.
+  capacity    INTEGER,
   note        TEXT,               -- vain 'new', näkyy vain moderaattorille
   device      TEXT    NOT NULL,   -- satunnais-UUID, ei henkilötieto
   app_version TEXT,

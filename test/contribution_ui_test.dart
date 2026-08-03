@@ -120,6 +120,48 @@ void main() {
       expect(jsonDecode(seen.single.body)['kind'], 'missing');
     });
 
+    testWidgets('vahvistus voi samalla korjata ruutumäärän', (tester) async {
+      // Erillistä korjausnappia ei ole: "Paikka on" ja "täällä on kaksi
+      // ruutua eikä kolme" ovat sama ele paikan päällä.
+      final seen = <http.Request>[];
+      await pumpDetails(
+        tester,
+        spotAt(61.5, 23.8, uid: 'osm:node/42'),
+        contributions: await contributionService(seen),
+        location: FakeLocationService(first: here),
+      );
+
+      await tester.tap(find.widgetWithText(ChoiceChip, '2'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Paikka on'));
+      await tester.pumpAndSettle();
+
+      final body = jsonDecode(seen.single.body) as Map<String, Object?>;
+      expect(body['kind'], 'present');
+      expect(body['capacity'], 2);
+      expect(body['target_uid'], 'osm:node/42');
+    });
+
+    testWidgets('kiisto ei kanna ruutumäärää', (tester) async {
+      // Olemattomalla paikalla ei ole ruutuja, ja palvelin hylkää yhdistelmän.
+      final seen = <http.Request>[];
+      await pumpDetails(
+        tester,
+        spotAt(61.5, 23.8, uid: 'osm:node/42'),
+        contributions: await contributionService(seen),
+        location: FakeLocationService(first: here),
+      );
+
+      await tester.tap(find.widgetWithText(ChoiceChip, '2'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ei löydy'));
+      await tester.pumpAndSettle();
+
+      final body = jsonDecode(seen.single.body) as Map<String, Object?>;
+      expect(body['kind'], 'missing');
+      expect(body.containsKey('capacity'), isFalse);
+    });
+
     testWidgets('evätty sijaintilupa kerrotaan eikä lähetetä mitään', (
       tester,
     ) async {
@@ -284,6 +326,63 @@ void main() {
       expect(body['lon'], here.longitude);
       expect(body['note'], 'P-talon 2. krs');
       expect(body.containsKey('target_uid'), isFalse);
+    });
+
+    testWidgets('ruutumäärä lähtee mukaan valittuna', (tester) async {
+      final seen = <http.Request>[];
+      await pumpAddSheet(
+        tester,
+        contributions: await contributionService(seen),
+        location: FakeLocationService(first: here),
+      );
+
+      await tester.tap(find.widgetWithText(ChoiceChip, '3'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lähetä ilmoitus'));
+      await tester.pumpAndSettle();
+
+      final body = jsonDecode(seen.single.body) as Map<String, Object?>;
+      expect(body['capacity'], 3);
+    });
+
+    testWidgets('valitsematta jätetty määrä ei mene mukaan arvauksena', (
+      tester,
+    ) async {
+      // Tyhjä kenttä ja arvaus ovat eri asioita: arvaus näyttäisi kartalla
+      // tiedolta, jota kukaan ei ole antanut.
+      final seen = <http.Request>[];
+      await pumpAddSheet(
+        tester,
+        contributions: await contributionService(seen),
+        location: FakeLocationService(first: here),
+      );
+
+      await tester.tap(find.text('Lähetä ilmoitus'));
+      await tester.pumpAndSettle();
+
+      final body = jsonDecode(seen.single.body) as Map<String, Object?>;
+      expect(body.containsKey('capacity'), isFalse);
+    });
+
+    testWidgets('saman sirun uudelleenvalinta peruu määrän', (tester) async {
+      // Väärin osunutta napautusta ei saisi muuten peruttua ilman lomakkeen
+      // sulkemista.
+      final seen = <http.Request>[];
+      await pumpAddSheet(
+        tester,
+        contributions: await contributionService(seen),
+        location: FakeLocationService(first: here),
+      );
+
+      await tester.tap(find.widgetWithText(ChoiceChip, '2'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, '2'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lähetä ilmoitus'));
+      await tester.pumpAndSettle();
+
+      final body = jsonDecode(seen.single.body) as Map<String, Object?>;
+      expect(body.containsKey('capacity'), isFalse);
     });
 
     testWidgets('epätarkalla sijainnilla lähetystä ei voi tehdä', (
