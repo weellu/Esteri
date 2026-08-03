@@ -14,7 +14,10 @@
     "id": "u00001",
     "reports": 1,
     "first_seen": "2026-08-03",
-    "last_seen": "2026-08-03"
+    "last_seen": "2026-08-03",
+    "capacities": [
+     3
+    ]
    }
   }
  ],
