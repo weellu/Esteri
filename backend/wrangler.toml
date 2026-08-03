@@ -1,6 +1,19 @@
 name = "esteri-api"
 main = "src/worker.js"
-compatibility_date = "2025-09-01"
+# Päivämäärä lukitsee ajonaikaisen käyttäytymisen ja on olemassa suojaamaan jo
+# deployattua Workeria. Tätä ei ole vielä kertaakaan deployattu, joten nosto on
+# nyt ilmainen — myöhemmin se pitää tehdä muutoslokia vasten.
+compatibility_date = "2026-08-03"
+
+# Molemmat olisivat oletuksena päällä. Ne kirjataan tähän, jotta arvo on päätös
+# eikä oletus.
+#
+# workers.dev-osoite on tarkoitettu julkiseksi: sovellus kutsuu sitä suoraan.
+workers_dev = true
+# Preview-osoitteet käyttävät samoja bindingejä kuin tuotanto, eli jokainen
+# aiemmin julkaistu versio jäisi tavoitettavaksi kirjoittaen samaan D1-kantaan.
+# Tälle palvelulle ei ole preview-työnkulkua, joten se olisi pelkkää pinta-alaa.
+preview_urls = false
 
 # Ilmaistasolla riittää yksi Worker ja yksi D1-kanta. Mitoitus: 100 000
 # pyyntöä ja 100 000 kirjoitettua riviä vuorokaudessa. Karkea arvio
@@ -8,10 +21,14 @@ compatibility_date = "2025-09-01"
 # 3 000 kirjoitusta vuorokaudessa eli kolmisen prosenttia kiintiöstä.
 
 [[d1_databases]]
+# Bindingin nimi on Workerin koodin sopimus (env.DB), ei kannan nimi.
+# `wrangler d1 create` ehdottaa tulosteessaan bindingiksi kannan nimeä —
+# sitä ei pidä kopioida tänne sellaisenaan.
 binding = "DB"
 database_name = "esteri"
-# Täytä `wrangler d1 create esteri` -komennon tulostamalla tunnisteella.
-database_id = "TAYTA_TAMA"
+# Tunniste ei ole salaisuus vaan osoite. Se kuuluu versionhallintaan, jotta
+# tuore klooni deployaa samaan kantaan eikä luo uutta.
+database_id = "256b0941-3e10-4fb9-949e-8022f1d1c4c0"
 
 # Salaisuudet asetetaan erikseen eikä tähän tiedostoon:
 #   wrangler secret put MODERATION_TOKEN   # moderointiajon lukuoikeus

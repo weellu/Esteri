@@ -29,11 +29,18 @@ muuttuu harvoin — se on hyvä asia palvelulle, jota ei valvota.
 
 ## Käyttöönotto
 
+**Kaikki wrangler-komennot ajetaan tästä hakemistosta.** Wrangler etsii
+`wrangler.tomlin` työhakemistosta ylöspäin, eikä repon juuressa ole sellaista.
+Juuresta ajettuna komento ei löydä konfiguraatiota ja valittaa puuttuvasta
+Workerin nimestä, vaikka nimi on tiedostossa.
+
 ```bash
+cd backend
+
 npm install -g wrangler
 wrangler login
 
-wrangler d1 create esteri           # kopioi database_id wrangler.tomliin
+wrangler d1 create esteri           # vain jos kantaa ei vielä ole
 wrangler d1 execute esteri --remote --file=schema.sql
 
 wrangler secret put MODERATION_TOKEN  # satunnainen merkkijono, esim. openssl rand -hex 32
@@ -41,6 +48,11 @@ wrangler secret put IP_SALT           # toinen satunnainen merkkijono
 
 wrangler deploy
 ```
+
+Kanta on jo luotu ja sen `database_id` on `wrangler.tomlissa`. Jos joudut
+luomaan sen uudelleen, kopioi `wrangler d1 create` -komennon tulosteesta **vain
+`database_id`** — komento ehdottaa bindingiksi kannan nimeä, mutta binding on
+Workerin koodin sopimus ja sen on pysyttävä `DB`:nä (`env.DB`).
 
 Deployn jälkeen:
 
@@ -56,7 +68,7 @@ Deployn jälkeen:
    - secret `MODERATION_TOKEN` — moderointiajon lukuoikeus jonoon
    - variable `CONTRIBUTION_API_BASE` — sama osoite kuin yllä
 
-Paikallinen ajo:
+Paikallinen ajo (myös tästä hakemistosta):
 
 ```bash
 wrangler dev --local
