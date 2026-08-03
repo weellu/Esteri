@@ -13,6 +13,7 @@ Tampereen, Turun ja Helsingin omat avoimet aineistot.
 | Karttanäkymä, klusterointi, kohteen tiedot | Valmis, ajettu iOS-simulaattorissa |
 | Navigointi puhelimen karttasovellukseen | Valmis |
 | Haku osoitteella ja paikannimellä | Valmis |
+| Oman sijainnin seuranta | Valmis |
 | Datan päivitys verkosta | Valmis |
 | Käyttäjien lisäämät paikat | Ei aloitettu, vaatisi taustapalvelimen |
 
@@ -180,6 +181,37 @@ eivät auta pysäköintipaikan etsijää.
 Koordinaattien akselijärjestys päätellään arvoalueista samalla logiikalla kuin
 Turun aineistossa. Suomen leveys- ja pituusasteet eivät mene päällekkäin, joten
 CRS84:n ja EPSG:4326:n sekaannus ei voi sijoittaa tulosta hiljaisesti väärin.
+
+### Sijainnin seuranta
+
+Sijaintipainike kiertää kolme tilaa:
+
+| Tila | Sijaintipiste | Kartta |
+|---|---|---|
+| Pois | ei näy, GPS sammutettu | — |
+| Seuraa | päivittyy | siirtyy sijainnin mukana |
+| Elävä | päivittyy | pysyy paikallaan |
+
+Kartan raahaus pudottaa seurannan eläväksi mutta **ei sammuta paikannusta**:
+liikkeellä olevan on voitava selata karttaa ilman että se nykii takaisin, mutta
+oman sijainnin on silti pysyttävä ajan tasalla. Sama koskee hakutuloksen ja
+kohteen valintaa. Painikkeen painallus elävässä tilassa keskittää kartan
+takaisin, ja seurantatilassa sammuttaa paikannuksen kokonaan.
+
+Zoom asetetaan vain ensimmäisen sijainnin kohdalla (16, sama kuin
+hakutuloksella). Sen jälkeen seuranta säilyttää käyttäjän valitseman
+mittakaavan — kartta ei saa zoomata itsestään.
+
+Seuranta on **vain etualalla**: `NSLocationWhenInUseUsageDescription` ja
+`ACCESS_FINE_LOCATION` riittävät, taustalupia ja Androidin foreground serviceä
+ei tarvita. Virta peruutetaan näkymän tuhoutuessa, joten GPS ei jää päälle.
+
+Päivitysten suodatin on 5 metriä. Ilman suodatinta paikallaan seisova laite
+tuottaisi päivitysvirran pelkästä mittauksen heittelystä ja kartta nykisi
+jatkuvasti.
+
+Karttanäkymä riippuu `LocationService`-rajapinnasta eikä suoraan
+`geolocator`ista, jotta seurannan tilakone on testattavissa ilman laitetta.
 
 ### Arkkitehtuuri
 

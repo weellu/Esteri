@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../config.dart';
@@ -12,6 +11,7 @@ import '../data/spot_data_source.dart';
 import '../data/spot_database.dart';
 import '../services/data_updater.dart';
 import '../services/geocoder.dart';
+import '../services/location_service.dart';
 import '../services/map_key_store.dart';
 import 'settings_screen.dart';
 import 'attribution_bar.dart';
@@ -19,12 +19,20 @@ import 'map_search_bar.dart';
 import 'spot_details_sheet.dart';
 import 'spot_marker.dart';
 
+/// Sijainnin seurannan tila.
+///
+/// [live] ja [following] eroavat vain siinä, siirtyykö kartta mukana. Kun
+/// käyttäjä on itse raahannut karttaa, seuranta ei saa nykäistä sitä takaisin
+/// — mutta sijaintipisteen on silti pysyttävä ajan tasalla.
+enum TrackingMode { off, live, following }
+
 class MapScreen extends StatefulWidget {
   const MapScreen({
     super.key,
     required this.database,
     required this.keyStore,
     this.geocoder,
+    this.locationService,
     this.dataSource,
     this.updater,
   });
@@ -34,6 +42,7 @@ class MapScreen extends StatefulWidget {
 
   /// Testeissä korvattavissa; tuotannossa luodaan oletustoteutus.
   final MmlGeocoder? geocoder;
+  final LocationService? locationService;
 
   /// Vaihdettava aineistolähde. Kun tämä on annettu, kartta hakee kohteet
   /// uudelleen aineiston päivittyessä ja asetuksista voi päivittää datan.
@@ -45,9 +54,15 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
+  /// Zoom, jolla kartta keskitetään tunnettuun sijaintiin. Sama mittakaava
+  /// kuin hakutuloksella: kortteli näkyvissä.
+  static const double _locatedZoom = 16;
+
   final MapController _mapController = MapController();
   late final MmlGeocoder _geocoder = widget.geocoder ?? MmlGeocoder();
   late final bool _ownsGeocoder = widget.geocoder == null;
+  late final LocationService _location =
+      widget.locationService ?? const GeolocatorLocationService();
 
   List<ParkingSpot> _spots = const [];
   final Map<Key, ParkingSpot> _spotsByKey = {};
@@ -56,6 +71,8 @@ class _MapScreenState extends State<MapScreen> {
   bool _loading = false;
   String? _loadError;
   LatLng? _userPosition;
+  TrackingMode _tracking = TrackingMode.off;
+  StreamSubscription<LatLng>? _positionSub;
 
   @override
   void initState() {
@@ -69,6 +86,9 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     widget.dataSource?.removeListener(_onDataChanged);
     _debounce?.cancel();
+    // Ilman peruutusta paikannus jäisi päälle näkymän tuhouduttua ja söisi
+    // akkua taustalla.
+    _positionSub?.cancel();
     if (_ownsGeocoder) _geocoder.dispose();
     _mapController.dispose();
     super.dispose();
@@ -81,10 +101,12 @@ class _MapScreenState extends State<MapScreen> {
   /// Siirrä kartta hakutuloksen kohdalle. Zoom 16 näyttää korttelin, mikä
   /// on oikea mittakaava pysäköintipaikan etsimiseen.
   void _goToPlace(GeocodeResult place) {
-    _mapController.move(LatLng(place.lat, place.lon), 16);
+    _releaseFollowing();
+    _mapController.move(LatLng(place.lat, place.lon), _locatedZoom);
   }
 
   Future<void> _goToSpot(ParkingSpot spot) async {
+    _releaseFollowing();
     _mapController.move(spot.position, 17);
     await _loadVisible(_mapController.camera.visibleBounds);
     if (mounted) await SpotDetailsSheet.show(context, spot);
@@ -93,6 +115,11 @@ class _MapScreenState extends State<MapScreen> {
   /// Kartan liikkuessa haetaan vain näkyvän ruudun kohteet. Viive estää
   /// kyselytulvan, kun käyttäjä raahaa karttaa yhtäjaksoisesti.
   void _onPositionChanged(MapCamera camera, bool hasGesture) {
+    // Vain käyttäjän oma ele irrottaa kartan seurannasta. Seurannan itsensä
+    // tekemä siirto tulee tänne arvolla hasGesture=false, eikä se saa
+    // katkaista seurantaa heti ensimmäiseen sijaintipäivitykseen.
+    if (hasGesture) _releaseFollowing();
+
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () {
       _loadVisible(camera.visibleBounds);
@@ -133,34 +160,98 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  Future<void> _goToMyLocation() async {
+  /// Painike kiertää tilat: pois → seuraa → (raahaus) → elävä → seuraa → pois.
+  Future<void> _toggleTracking() async {
+    switch (_tracking) {
+      case TrackingMode.off:
+        await _startTracking();
+      case TrackingMode.live:
+        // Paikannus on jo päällä; käyttäjä haluaa vain kartan takaisin
+        // sijaintiinsa. Zoom säilytetään — hän on itse valinnut mittakaavan.
+        setState(() => _tracking = TrackingMode.following);
+        final position = _userPosition;
+        if (position != null) {
+          _mapController.move(position, _mapController.camera.zoom);
+        }
+      case TrackingMode.following:
+        _stopTracking();
+    }
+  }
+
+  Future<void> _startTracking() async {
     final messenger = ScaffoldMessenger.of(context);
 
-    if (!await Geolocator.isLocationServiceEnabled()) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Sijaintipalvelut eivät ole päällä.')),
-      );
-      return;
-    }
-
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Sijaintilupa puuttuu.')),
-      );
-      return;
-    }
-
-    final position = await Geolocator.getCurrentPosition();
+    final denial = await _location.ensureAvailable();
     if (!mounted) return;
-    final target = LatLng(position.latitude, position.longitude);
-    setState(() => _userPosition = target);
-    _mapController.move(target, 16);
+    if (denial != null) {
+      messenger.showSnackBar(SnackBar(content: Text(_denialMessage(denial))));
+      return;
+    }
+
+    setState(() => _tracking = TrackingMode.following);
+    _positionSub = _location.positions().listen(
+      _onPosition,
+      onError: (Object error) => _onLocationError(error, messenger),
+    );
+
+    // Virta voi olla hiljaa siihen asti, kunnes laite liikkuu suodattimen
+    // verran. Erillinen ensimmäinen mittaus antaa pisteen heti, kuten
+    // kertaluontoinen keskitys ennen tätä teki.
+    try {
+      final first = await _location.current();
+      if (mounted && _userPosition == null) _onPosition(first);
+    } on Exception catch (error) {
+      // Ei virheilmoitusta: virta saattaa silti tuottaa sijainnin.
+      debugPrint('Ensimmäistä sijaintia ei saatu: $error');
+    }
   }
+
+  void _stopTracking() {
+    _positionSub?.cancel();
+    _positionSub = null;
+    setState(() {
+      _tracking = TrackingMode.off;
+      _userPosition = null;
+    });
+  }
+
+  /// Irrota kartta seurannasta paikannusta katkaisematta.
+  void _releaseFollowing() {
+    if (_tracking != TrackingMode.following) return;
+    setState(() => _tracking = TrackingMode.live);
+  }
+
+  void _onPosition(LatLng position) {
+    if (!mounted) return;
+    final isFirst = _userPosition == null;
+    setState(() => _userPosition = position);
+    if (_tracking == TrackingMode.following) {
+      // Ensimmäinen sijainti tuo mukanaan mittakaavan, myöhemmät eivät:
+      // seuranta ei saa zoomata karttaa uudelleen käyttäjän selän takana.
+      _mapController.move(
+        position,
+        isFirst ? _locatedZoom : _mapController.camera.zoom,
+      );
+    }
+  }
+
+  void _onLocationError(Object error, ScaffoldMessengerState messenger) {
+    debugPrint('Sijainnin seuranta epäonnistui: $error');
+    if (!mounted) return;
+    // Pysähtynyt seuranta näyttää käyttäjälle samalta kuin paikallaan
+    // seisominen, joten katkos on kerrottava.
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Sijainnin seuranta keskeytyi.')),
+    );
+    _stopTracking();
+  }
+
+  String _denialMessage(LocationDenial denial) => switch (denial) {
+    LocationDenial.serviceDisabled => 'Sijaintipalvelut eivät ole päällä.',
+    LocationDenial.permissionDenied => 'Sijaintilupa puuttuu.',
+    LocationDenial.permissionDeniedForever =>
+      'Sijaintilupa on estetty. Salli sijainti laitteen asetuksista.',
+  };
 
   Future<void> _openKeyScreen() async {
     await Navigator.of(context).push(
@@ -215,7 +306,10 @@ class _MapScreenState extends State<MapScreen> {
               FlutterMap(
                 mapController: _mapController,
                 options: MapOptions(
-                  initialCenter: const LatLng(Config.fallbackLat, Config.fallbackLon),
+                  initialCenter: const LatLng(
+                    Config.fallbackLat,
+                    Config.fallbackLon,
+                  ),
                   initialZoom: Config.fallbackZoom,
                   onPositionChanged: _onPositionChanged,
                   onMapReady: () =>
@@ -294,10 +388,9 @@ class _MapScreenState extends State<MapScreen> {
               Positioned(
                 right: 12,
                 bottom: AttributionBar.height + 12,
-                child: FloatingActionButton(
-                  onPressed: _goToMyLocation,
-                  tooltip: 'Oma sijainti',
-                  child: const Icon(Icons.my_location),
+                child: _TrackingButton(
+                  mode: _tracking,
+                  onPressed: _toggleTracking,
                 ),
               ),
               // Attribuutio on lisenssiehto, joten se pidetään aina näkyvissä
@@ -311,6 +404,37 @@ class _MapScreenState extends State<MapScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// Sijaintipainike, joka kertoo myös vallitsevan tilan.
+///
+/// Ero elävän pisteen ja seurannan välillä on käyttäjälle olennainen: jos
+/// kartta liikkuu itsestään, hänen on tiedettävä miksi — ja miten sen saa
+/// lakkaamaan.
+class _TrackingButton extends StatelessWidget {
+  const _TrackingButton({required this.mode, required this.onPressed});
+
+  final TrackingMode mode;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isFollowing = mode == TrackingMode.following;
+    return FloatingActionButton(
+      onPressed: onPressed,
+      tooltip: switch (mode) {
+        TrackingMode.off => 'Näytä oma sijainti',
+        TrackingMode.live => 'Keskitä kartta sijaintiin',
+        TrackingMode.following => 'Lopeta sijainnin seuranta',
+      },
+      backgroundColor: isFollowing ? scheme.primary : null,
+      foregroundColor: isFollowing ? scheme.onPrimary : null,
+      child: Icon(
+        mode == TrackingMode.off ? Icons.location_disabled : Icons.my_location,
       ),
     );
   }
@@ -360,7 +484,10 @@ class _ErrorBanner extends StatelessWidget {
       margin: EdgeInsets.zero,
       color: theme.colorScheme.errorContainer,
       child: ListTile(
-        leading: Icon(Icons.warning_amber, color: theme.colorScheme.onErrorContainer),
+        leading: Icon(
+          Icons.warning_amber,
+          color: theme.colorScheme.onErrorContainer,
+        ),
         title: Text(message),
         subtitle: const Text('Kokeile käynnistää sovellus uudelleen.'),
       ),

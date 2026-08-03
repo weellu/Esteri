@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:leparkki/config.dart';
 import 'package:leparkki/data/parking_spot.dart';
 import 'package:leparkki/data/spot_database.dart';
 import 'package:leparkki/services/geocoder.dart';
+import 'package:leparkki/services/location_service.dart';
 import 'package:leparkki/services/map_key_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -30,8 +33,13 @@ class FakeSpotRepository implements SpotRepository {
   }) async {
     requestedBounds.add([minLat, maxLat, minLon, maxLon]);
     return spots
-        .where((s) =>
-            s.lat >= minLat && s.lat <= maxLat && s.lon >= minLon && s.lon <= maxLon)
+        .where(
+          (s) =>
+              s.lat >= minLat &&
+              s.lat <= maxLat &&
+              s.lon >= minLon &&
+              s.lon <= maxLon,
+        )
         .toList();
   }
 
@@ -51,12 +59,13 @@ class FailingSpotRepository implements SpotRepository {
     required double minLon,
     required double maxLon,
     int limit = Config.maxSpotsPerViewport,
-  }) async =>
-      throw Exception('no such module: rtree');
+  }) async => throw Exception('no such module: rtree');
 
   @override
-  Future<List<ParkingSpot>> searchByText(String query, {int limit = 20}) async =>
-      const [];
+  Future<List<ParkingSpot>> searchByText(
+    String query, {
+    int limit = 20,
+  }) async => const [];
 }
 
 ParkingSpot spotAt(
@@ -67,24 +76,72 @@ ParkingSpot spotAt(
   int? capacity,
   String? name,
   String? address,
-}) =>
-    ParkingSpot(
-      id: 1,
-      uid: uid,
-      source: 'osm',
-      lat: lat,
-      lon: lon,
-      precision: precision,
-      capacity: capacity,
-      name: name,
-      address: address,
-    );
+}) => ParkingSpot(
+  id: 1,
+  uid: uid,
+  source: 'osm',
+  lat: lat,
+  lon: lon,
+  precision: precision,
+  capacity: capacity,
+  name: name,
+  address: address,
+);
 
 Future<MapKeyStore> fakeKeyStore({String? key}) async {
   SharedPreferences.setMockInitialValues(
     key == null ? <String, Object>{} : <String, Object>{'mml_api_key': key},
   );
   return MapKeyStore.load();
+}
+
+/// Ohjattava sijaintilähde: testi päättää luvan ja syöttää sijainnit itse.
+class FakeLocationService implements LocationService {
+  FakeLocationService({this.denial, this.first});
+
+  /// Kun tämä on annettu, [ensureAvailable] hylkää seurannan.
+  final LocationDenial? denial;
+
+  /// Ensimmäinen mittaus, jonka [current] palauttaa. Null = mittaus ei onnistu.
+  final LatLng? first;
+
+  final _controller = StreamController<LatLng>.broadcast();
+  int subscriptions = 0;
+  int cancellations = 0;
+
+  @override
+  Future<LocationDenial?> ensureAvailable() async => denial;
+
+  @override
+  Future<LatLng> current() async {
+    final position = first;
+    if (position == null) throw Exception('sijaintia ei saatavilla');
+    return position;
+  }
+
+  @override
+  Stream<LatLng> positions() {
+    subscriptions++;
+    // Oma kääre tilausta kohden, jotta testi voi todeta paikannuksen oikeasti
+    // pysähtyvän — ei vain katoavan käyttöliittymästä.
+    late StreamController<LatLng> wrapper;
+    StreamSubscription<LatLng>? upstream;
+    wrapper = StreamController<LatLng>(
+      onListen: () => upstream = _controller.stream.listen(
+        wrapper.add,
+        onError: wrapper.addError,
+      ),
+      onCancel: () {
+        cancellations++;
+        return upstream?.cancel();
+      },
+    );
+    return wrapper.stream;
+  }
+
+  void emit(LatLng position) => _controller.add(position);
+
+  void fail(Object error) => _controller.addError(error);
 }
 
 /// Geokoodaaja, joka palauttaa annetut osumat verkkoon menemättä.
