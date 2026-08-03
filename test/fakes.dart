@@ -4,12 +4,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:leparkki/config.dart';
-import 'package:leparkki/data/parking_spot.dart';
-import 'package:leparkki/data/spot_database.dart';
-import 'package:leparkki/services/geocoder.dart';
-import 'package:leparkki/services/location_service.dart';
-import 'package:leparkki/services/map_key_store.dart';
+import 'package:esteri/config.dart';
+import 'package:esteri/data/parking_spot.dart';
+import 'package:esteri/data/spot_database.dart';
+import 'package:esteri/services/geocoder.dart';
+import 'package:esteri/services/location_service.dart';
+import 'package:esteri/services/map_key_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Muistinvarainen korvike SQLitelle, jotta näkymien logiikan voi testata

@@ -283,7 +283,7 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('LEParkki'),
+        title: const Text('Esteri'),
         actions: [
           IconButton(
             tooltip: 'Asetukset',

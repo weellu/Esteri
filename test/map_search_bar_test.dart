@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:leparkki/data/parking_spot.dart';
-import 'package:leparkki/services/geocoder.dart';
-import 'package:leparkki/ui/map_search_bar.dart';
+import 'package:esteri/data/parking_spot.dart';
+import 'package:esteri/services/geocoder.dart';
+import 'package:esteri/ui/map_search_bar.dart';
 
 import 'fakes.dart';
 

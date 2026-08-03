@@ -20,13 +20,13 @@ log = logging.getLogger(__name__)
 # selainmaisen tunnisteen.
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "LEParkki/0.1 (+https://github.com/leparkki; avoin data -pipeline)"
+    "Esteri/0.1 (+https://github.com/weellu/Esteri; avoin data -pipeline)"
 )
 
 # Overpass taas hylkää selainmaisen tunnisteen (HTTP 406) ja odottaa kuvaavaa
 # tunnistetta yhteystiedolla — se on myös sen käyttöetiketin mukaista.
 # Siksi User-Agent on lähdekohtainen eikä globaali vakio.
-DESCRIPTIVE_USER_AGENT = "LEParkki/0.1 (avoin data -pipeline; +https://github.com/leparkki)"
+DESCRIPTIVE_USER_AGENT = "Esteri/0.1 (avoin data -pipeline; +https://github.com/weellu/Esteri)"
 
 DEFAULT_TIMEOUT = 180
 MAX_ATTEMPTS = 3

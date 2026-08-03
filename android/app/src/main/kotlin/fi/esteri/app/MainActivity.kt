@@ -1,4 +1,4 @@
-package fi.leparkki.leparkki
+package fi.esteri.app
 
 import io.flutter.embedding.android.FlutterActivity
 

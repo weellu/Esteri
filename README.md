@@ -1,4 +1,4 @@
-# LEParkki
+# Esteri
 
 Liikkumisesteisten pysäköintipaikkojen karttasovellus iOS:lle ja Androidille.
 Aineisto kootaan avoimista rajapinnoista: OpenStreetMap, Digiroad sekä

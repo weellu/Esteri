@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:leparkki/data/parking_spot.dart';
-import 'package:leparkki/ui/spot_details_sheet.dart';
+import 'package:esteri/data/parking_spot.dart';
+import 'package:esteri/ui/spot_details_sheet.dart';
 
 ParkingSpot spot({
   SpotPrecision precision = SpotPrecision.space,

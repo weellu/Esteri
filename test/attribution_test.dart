@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:leparkki/ui/attribution_bar.dart';
-import 'package:leparkki/ui/licenses_screen.dart';
-import 'package:leparkki/ui/map_screen.dart';
+import 'package:esteri/ui/attribution_bar.dart';
+import 'package:esteri/ui/licenses_screen.dart';
+import 'package:esteri/ui/map_screen.dart';
 
 import 'fakes.dart';
 

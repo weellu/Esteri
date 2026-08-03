@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:leparkki/config.dart';
-import 'package:leparkki/services/data_updater.dart';
+import 'package:esteri/config.dart';
+import 'package:esteri/services/data_updater.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 const installed = '2026-07-01T00:00:00+00:00';
@@ -134,7 +134,7 @@ void main() {
   group('validateDatabaseFile — ladatun tiedoston tarkistus', () {
     late Directory dir;
 
-    setUp(() => dir = Directory.systemTemp.createTempSync('leparkki_test'));
+    setUp(() => dir = Directory.systemTemp.createTempSync('esteri_test'));
     tearDown(() => dir.deleteSync(recursive: true));
 
     test('kelvollinen tiedosto hyväksytään', () async {

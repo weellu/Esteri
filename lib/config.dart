@@ -39,7 +39,7 @@ class Config {
 
   /// Tunniste tiilipyynnöissä. OSM:n omaa tiilipalvelinta ei käytetä
   /// lainkaan, koska sen käyttöehdot eivät salli sovellusjakelua.
-  static const String userAgentPackageName = 'fi.leparkki.leparkki';
+  static const String userAgentPackageName = 'fi.esteri.app';
 
   /// Aineiston versio. Nosta tätä, kun assets/data/invapaikat.sqlite
   /// päivitetään — muuten sovellus jättää vanhan kopion käyttöön.
@@ -49,7 +49,7 @@ class Config {
 
   /// Julkaistu aineisto. Pipeline ajetaan viikoittain GitHub Actionsissa ja
   /// tulos julkaistaan Pagesiin, joten datapäivitys ei vaadi kauppakierrosta.
-  static const String dataBaseUrl = 'https://weellu.github.io/LEParkki';
+  static const String dataBaseUrl = 'https://weellu.github.io/Esteri';
   static const String dataManifestUrl = '$dataBaseUrl/manifest.json';
   static const String dataSqliteUrl = '$dataBaseUrl/invapaikat.sqlite';
 

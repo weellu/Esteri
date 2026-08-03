@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:leparkki/data/parking_spot.dart';
-import 'package:leparkki/data/spot_database.dart';
+import 'package:esteri/data/parking_spot.dart';
+import 'package:esteri/data/spot_database.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// Rakenna aineisto pipelinen skeemalla.
@@ -73,7 +73,7 @@ void main() {
   });
 
   late Directory dir;
-  setUp(() => dir = Directory.systemTemp.createTempSync('leparkki_db'));
+  setUp(() => dir = Directory.systemTemp.createTempSync('esteri_db'));
   tearDown(() => dir.deleteSync(recursive: true));
 
   group('R-treen tunnistus tapahtuu laitteelta, ei metatiedosta', () {

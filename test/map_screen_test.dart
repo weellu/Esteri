@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:leparkki/config.dart';
-import 'package:leparkki/services/geocoder.dart';
-import 'package:leparkki/services/location_service.dart';
-import 'package:leparkki/services/map_key_store.dart';
-import 'package:leparkki/ui/map_screen.dart';
-import 'package:leparkki/ui/spot_marker.dart';
+import 'package:esteri/config.dart';
+import 'package:esteri/services/geocoder.dart';
+import 'package:esteri/services/location_service.dart';
+import 'package:esteri/services/map_key_store.dart';
+import 'package:esteri/ui/map_screen.dart';
+import 'package:esteri/ui/spot_marker.dart';
 
 import 'fakes.dart';
 

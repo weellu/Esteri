@@ -10,23 +10,23 @@ import 'ui/spot_marker.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const LEParkkiApp());
+  runApp(const EsteriApp());
 }
 
-class LEParkkiApp extends StatefulWidget {
-  const LEParkkiApp({super.key});
+class EsteriApp extends StatefulWidget {
+  const EsteriApp({super.key});
 
   @override
-  State<LEParkkiApp> createState() => _LEParkkiAppState();
+  State<EsteriApp> createState() => _EsteriAppState();
 }
 
-class _LEParkkiAppState extends State<LEParkkiApp> {
+class _EsteriAppState extends State<EsteriApp> {
   late final Future<AppServices> _services = AppServices.create();
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'LEParkki',
+      title: 'Esteri',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: SpotVisuals.exact),
