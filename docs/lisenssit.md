@@ -7,6 +7,18 @@ keskenään.
 
 `lib/`, `pipeline/`, `tests/`, `test/` ja konfiguraatiot. Ks. [LICENSE](../LICENSE).
 
+### Material-ikonit — Apache 2.0
+
+Sovellus käyttää Flutterin mukana tulevaa `MaterialIcons`-fonttia. Kartan
+markkerien ja sovelluskuvakkeen esteettömyyssymboli on sen glyfi
+`Icons.accessible` (`0xe03e`), joten sama lisenssi koskee myös
+`ios/Runner/Assets.xcassets/AppIcon.appiconset/`- ja
+`android/app/src/main/res/mipmap-*/`-kuvakkeita.
+
+Symboli ei ole kansainvälinen esteettömyyden tunnus (ISA) sellaisenaan vaan
+Material Designin oma tulkinta. Ero on tarkoituksellinen: sovelluskuvakkeen ei
+pidä olla erehdyttävän lähellä virallista liikennemerkkiä.
+
 ## Aineisto — ODbL 1.0
 
 `assets/data/invapaikat.sqlite` ja pipelinen tuottama `data/`.
