@@ -490,7 +490,16 @@ Toiminnot ovat piilossa, kunnes taustapalvelun osoite on annettu — nappi, joka
 lähettää olemattomaan osoitteeseen, on huonompi kuin ei nappia lainkaan.
 
 ```bash
-flutter run --dart-define=ESTERI_API=https://<worker>.workers.dev
+flutter run --dart-define=ESTERI_API=https://esteri-api.weellu.workers.dev
+```
+
+**Sama määrittely tarvitaan jokaiseen julkaisukäännökseen.** `String.fromEnvironment`
+luetaan käännösaikana, joten ilman lippua valmis paketti on ilman ilmoitusnappeja
+— eikä käännös varoita mitenkään:
+
+```bash
+flutter build ipa       --dart-define=ESTERI_API=https://esteri-api.weellu.workers.dev
+flutter build apk --release --dart-define=ESTERI_API=https://esteri-api.weellu.workers.dev
 ```
 
 Workerin pystytys ja tarvittavat GitHub-salaisuudet: [`backend/README.md`](backend/README.md).

@@ -73,10 +73,14 @@ Deployn jälkeen:
    `ESTERI_API`-määrittelystä (`Config.contributionApiBase`):
 
    ```bash
-   flutter run --dart-define=ESTERI_API=https://esteri-api.<tili>.workers.dev
+   flutter run --dart-define=ESTERI_API=https://esteri-api.weellu.workers.dev
    ```
 
    Ilman sitä ilmoitusnapit ovat piilossa eikä sovellus ota yhteyttä tänne.
+
+   Lippu kuuluu myös jokaiseen `flutter build` -komentoon, ei vain ajoon.
+   `String.fromEnvironment` luetaan käännösaikana, joten ilman sitä valmis
+   paketti on hiljaa ilman ilmoitustoimintoja — näin kävi versiolle 1.0.1+3.
 2. Tallenna GitHubiin repositoryn asetuksiin:
    - secret `MODERATION_TOKEN` — moderointiajon lukuoikeus jonoon
    - variable `CONTRIBUTION_API_BASE` — sama osoite kuin yllä

@@ -76,10 +76,16 @@ class Config {
   ///
   /// **Tyhjä oletusarvo on tarkoituksellinen.** Kun osoitetta ei ole, sovellus
   /// piilottaa vahvistus- ja lisäysnapit kokonaan — nappi, joka lähettää
-  /// olemattomaan osoitteeseen, on huonompi kuin ei nappia lainkaan. Täytä
-  /// tämä `wrangler deploy`n jälkeen tai anna käännösaikana:
+  /// olemattomaan osoitteeseen, on huonompi kuin ei nappia lainkaan.
   ///
-  ///     flutter run --dart-define=ESTERI_API=https://<worker>.workers.dev
+  /// Käytössä oleva Worker on `https://esteri-api.weellu.workers.dev`, ja se
+  /// annetaan käännösaikana:
+  ///
+  ///     flutter run --dart-define=ESTERI_API=https://esteri-api.weellu.workers.dev
+  ///
+  /// Lippu tarvitaan myös `flutter build`iin. Ilman sitä julkaisupaketista
+  /// puuttuvat ilmoitustoiminnot kokonaan eikä käännös huomauta siitä —
+  /// versio 1.0.1+3 lähti näin.
   ///
   /// Lähetys ei kuulu lukupolkuun: kartta, haku ja navigointi toimivat
   /// ilman tätä palvelua täsmälleen kuten ennenkin.
