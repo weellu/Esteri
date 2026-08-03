@@ -13,26 +13,59 @@ class SpotVisuals {
   static const Color exact = Color(0xFF0B5FA5);
   static const Color approximate = Color(0xFF5B7A93);
 
-  static Color colorFor(SpotPrecision precision) => switch (precision) {
-        SpotPrecision.space => exact,
-        SpotPrecision.sign => exact,
-        SpotPrecision.area => approximate,
-      };
+  /// Käyttäjän ilmoittama, vahvistamaton kohde. Eri sävy kuin avoimen
+  /// aineiston kohteilla, mutta ero ei jää värin varaan: merkissä on lisäksi
+  /// oma tunnus kulmassa.
+  static const Color unverified = Color(0xFF8A5000);
+
+  static Color colorFor(
+    SpotPrecision precision, [
+    SpotVerification verification = SpotVerification.curated,
+  ]) {
+    if (verification == SpotVerification.reported) return unverified;
+    return switch (precision) {
+      SpotPrecision.space => exact,
+      SpotPrecision.sign => exact,
+      SpotPrecision.area => approximate,
+    };
+  }
 
   /// Lyhyt selitys siitä, mitä sijainti tarkoittaa.
   static String explain(SpotPrecision precision) => switch (precision) {
-        SpotPrecision.space => 'Merkitty invapysäköintipaikka tässä kohdassa.',
-        SpotPrecision.sign =>
-          'Invapysäköinnin liikennemerkki. Paikka on merkin välittömässä läheisyydessä.',
-        SpotPrecision.area =>
-          'Pysäköintialue, jolla on invapaikkoja. Sijainti on alueen keskipiste — '
-              'paikan tarkkaa kohtaa alueella ei tiedetä.',
-      };
+    SpotPrecision.space => 'Merkitty invapysäköintipaikka tässä kohdassa.',
+    SpotPrecision.sign =>
+      'Invapysäköinnin liikennemerkki. Paikka on merkin välittömässä läheisyydessä.',
+    SpotPrecision.area =>
+      'Pysäköintialue, jolla on invapaikkoja. Sijainti on alueen keskipiste — '
+          'paikan tarkkaa kohtaa alueella ei tiedetä.',
+  };
+
+  /// Selitys, joka ottaa huomioon myös sen, mistä tieto on peräisin.
+  ///
+  /// Käyttäjän ilmoittaman kohteen kohdalla tarkkuutta kuvaava teksti olisi
+  /// harhaanjohtava: kysymys ei ole siitä, missä kohtaa aluetta paikka on,
+  /// vaan siitä, onko paikkaa lainkaan.
+  static String explainSpot(ParkingSpot spot) => switch (spot.verification) {
+    SpotVerification.curated => explain(spot.precision),
+    SpotVerification.reported =>
+      'Käyttäjän ilmoittama paikka, jota kukaan muu ei ole vielä '
+          'vahvistanut. Sijainti on likimääräinen.',
+    SpotVerification.confirmed =>
+      'Käyttäjien ilmoittama paikka, jonka ${spot.confirmations} eri '
+          'käyttäjää on vahvistanut paikan päällä.',
+  };
 
   static String shortLabel(SpotPrecision precision) => switch (precision) {
-        SpotPrecision.space => 'Tarkka paikka',
-        SpotPrecision.sign => 'Liikennemerkki',
-        SpotPrecision.area => 'Alueella',
+    SpotPrecision.space => 'Tarkka paikka',
+    SpotPrecision.sign => 'Liikennemerkki',
+    SpotPrecision.area => 'Alueella',
+  };
+
+  static String shortLabelForSpot(ParkingSpot spot) =>
+      switch (spot.verification) {
+        SpotVerification.curated => shortLabel(spot.precision),
+        SpotVerification.reported => 'Vahvistamaton ilmoitus',
+        SpotVerification.confirmed => 'Käyttäjien vahvistama',
       };
 }
 
@@ -43,30 +76,84 @@ class SpotMarkerIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = SpotVisuals.colorFor(spot.precision);
-    final isArea = spot.precision == SpotPrecision.area;
-    final isSign = spot.precision == SpotPrecision.sign;
+    final color = SpotVisuals.colorFor(spot.precision, spot.verification);
+    final isReported = spot.verification == SpotVerification.reported;
+    // Vahvistamaton kohde piirretään aina läpikuultavana riippumatta siitä,
+    // mitä sen precision sanoo — täytetty merkki lupaa varmuutta, jota ei ole.
+    final isHollow = isReported || spot.precision == SpotPrecision.area;
+    final isSign = spot.precision == SpotPrecision.sign && !isReported;
 
     return Semantics(
-      label: '${spot.title}. ${SpotVisuals.shortLabel(spot.precision)}',
+      label: '${spot.title}. ${SpotVisuals.shortLabelForSpot(spot)}',
       button: true,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          // Alue esitetään läpikuultavana ja liikennemerkki neliönä, jotta
-          // ero tarkkaan paikkaan näkyy ilman värin erottamista.
-          color: isArea ? Colors.white : color,
-          shape: isSign ? BoxShape.rectangle : BoxShape.circle,
-          borderRadius: isSign ? BorderRadius.circular(6) : null,
-          border: Border.all(color: color, width: isArea ? 3 : 2),
-          boxShadow: const [
-            BoxShadow(color: Color(0x33000000), blurRadius: 4, offset: Offset(0, 2)),
-          ],
-        ),
-        child: Center(
-          child: Icon(
-            Icons.accessible,
-            size: 18,
-            color: isArea ? color : Colors.white,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              // Alue esitetään läpikuultavana ja liikennemerkki neliönä, jotta
+              // ero tarkkaan paikkaan näkyy ilman värin erottamista.
+              color: isHollow ? Colors.white : color,
+              shape: isSign ? BoxShape.rectangle : BoxShape.circle,
+              borderRadius: isSign ? BorderRadius.circular(6) : null,
+              border: Border.all(color: color, width: isHollow ? 3 : 2),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x33000000),
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Icon(
+                Icons.accessible,
+                size: 18,
+                color: isHollow ? color : Colors.white,
+              ),
+            ),
+          ),
+          // Vahvistamattomuus merkitään omalla tunnuksella eikä pelkällä
+          // värillä. Sovelluksen käyttäjäkunta huomioiden pelkkä sävyero
+          // olisi tässä huono valinta.
+          if (isReported)
+            Positioned(
+              top: -3,
+              right: -3,
+              // Tunnus toistaa visuaalisesti sen, minkä Semantics-otsikko jo
+              // kertoo. Ilman poissulkemista ruudunlukija lukisi perään
+              // irrallisen "?":n.
+              child: ExcludeSemantics(child: _UnverifiedBadge(color: color)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UnverifiedBadge extends StatelessWidget {
+  const _UnverifiedBadge({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 1.5),
+      ),
+      child: const Center(
+        child: Text(
+          '?',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 9,
+            height: 1.1,
+            fontWeight: FontWeight.bold,
           ),
         ),
       ),
@@ -94,7 +181,11 @@ class ClusterIcon extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: Colors.white, width: 2),
           boxShadow: const [
-            BoxShadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2)),
+            BoxShadow(
+              color: Color(0x40000000),
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
           ],
         ),
         child: Center(
@@ -131,16 +222,29 @@ class MapLegend extends StatelessWidget {
             _row(context, SpotPrecision.sign, 'Liikennemerkki'),
             const SizedBox(height: 6),
             _row(context, SpotPrecision.area, 'Alueella invapaikkoja'),
+            const SizedBox(height: 6),
+            _row(
+              context,
+              SpotPrecision.area,
+              'Vahvistamaton ilmoitus',
+              verification: SpotVerification.reported,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _row(BuildContext context, SpotPrecision precision, String label) {
-    final color = SpotVisuals.colorFor(precision);
-    final isArea = precision == SpotPrecision.area;
-    final isSign = precision == SpotPrecision.sign;
+  Widget _row(
+    BuildContext context,
+    SpotPrecision precision,
+    String label, {
+    SpotVerification verification = SpotVerification.curated,
+  }) {
+    final color = SpotVisuals.colorFor(precision, verification);
+    final isReported = verification == SpotVerification.reported;
+    final isHollow = isReported || precision == SpotPrecision.area;
+    final isSign = precision == SpotPrecision.sign && !isReported;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -148,11 +252,27 @@ class MapLegend extends StatelessWidget {
           width: 18,
           height: 18,
           decoration: BoxDecoration(
-            color: isArea ? Colors.white : color,
+            color: isHollow ? Colors.white : color,
             shape: isSign ? BoxShape.rectangle : BoxShape.circle,
             borderRadius: isSign ? BorderRadius.circular(4) : null,
-            border: Border.all(color: color, width: isArea ? 2.5 : 1.5),
+            border: Border.all(color: color, width: isHollow ? 2.5 : 1.5),
           ),
+          child: isReported
+              ? Center(
+                  // Selitteen tekstisarake kertoo saman asian sanoina.
+                  child: ExcludeSemantics(
+                    child: Text(
+                      '?',
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 11,
+                        height: 1.1,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                )
+              : null,
         ),
         const SizedBox(width: 8),
         Text(label, style: Theme.of(context).textTheme.bodySmall),

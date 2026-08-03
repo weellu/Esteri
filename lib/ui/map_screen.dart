@@ -9,11 +9,13 @@ import '../config.dart';
 import '../data/parking_spot.dart';
 import '../data/spot_data_source.dart';
 import '../data/spot_database.dart';
+import '../services/contribution_service.dart';
 import '../services/data_updater.dart';
 import '../services/geocoder.dart';
 import '../services/location_service.dart';
 import '../services/map_key_store.dart';
 import 'settings_screen.dart';
+import 'add_spot_sheet.dart';
 import 'attribution_bar.dart';
 import 'map_search_bar.dart';
 import 'spot_details_sheet.dart';
@@ -35,10 +37,16 @@ class MapScreen extends StatefulWidget {
     this.locationService,
     this.dataSource,
     this.updater,
+    this.contributions,
   });
 
   final SpotRepository database;
   final MapKeyStore keyStore;
+
+  /// Käyttäjien ilmoitusten lähetys. Kun tämä puuttuu tai taustapalvelua ei
+  /// ole määritetty, vahvistus- ja lisäystoiminnot jäävät kokonaan pois
+  /// näkyvistä — muu näkymä toimii täsmälleen kuten ennenkin.
+  final ContributionService? contributions;
 
   /// Testeissä korvattavissa; tuotannossa luodaan oletustoteutus.
   final MmlGeocoder? geocoder;
@@ -67,6 +75,9 @@ class _MapScreenState extends State<MapScreen> {
   List<ParkingSpot> _spots = const [];
   final Map<Key, ParkingSpot> _spotsByKey = {};
 
+  /// Näytetäänkö ilmoitustoiminnot lainkaan.
+  bool get _canContribute => widget.contributions?.enabled ?? false;
+
   Timer? _debounce;
   bool _loading = false;
   String? _loadError;
@@ -80,6 +91,12 @@ class _MapScreenState extends State<MapScreen> {
     // Aineisto voi vaihtua taustalla latautuvaan päivitykseen, jolloin
     // näkyvän alueen kohteet on haettava uudelleen.
     widget.dataSource?.addListener(_onDataChanged);
+
+    // Verkon katketessa jonoon jääneet ilmoitukset lähtevät seuraavalla
+    // käynnistyksellä. Tulosta ei näytetä: käyttäjä sai palautteen jo silloin,
+    // kun hän painoi nappia, eikä myöhempi ilmoitus liity mihinkään, mitä hän
+    // on juuri tekemässä.
+    if (_canContribute) unawaited(widget.contributions!.flushPending());
   }
 
   @override
@@ -109,7 +126,14 @@ class _MapScreenState extends State<MapScreen> {
     _releaseFollowing();
     _mapController.move(spot.position, 17);
     await _loadVisible(_mapController.camera.visibleBounds);
-    if (mounted) await SpotDetailsSheet.show(context, spot);
+    if (mounted) {
+      await SpotDetailsSheet.show(
+        context,
+        spot,
+        contributions: _canContribute ? widget.contributions : null,
+        location: _canContribute ? _location : null,
+      );
+    }
   }
 
   /// Kartan liikkuessa haetaan vain näkyvän ruudun kohteet. Viive estää
@@ -253,6 +277,19 @@ class _MapScreenState extends State<MapScreen> {
       'Sijaintilupa on estetty. Salli sijainti laitteen asetuksista.',
   };
 
+  Future<void> _openAddSpot() async {
+    final contributions = widget.contributions;
+    if (contributions == null) return;
+    await AddSpotSheet.show(
+      context,
+      contributions: contributions,
+      location: _location,
+    );
+    // Kartta ei päivity tästä: ilmoitus näkyy vasta kun se on käyty läpi
+    // moderoinnissa ja julkaistu aineiston mukana. Sitä ei pidä teeskennellä
+    // ilmestyneeksi heti — käyttäjä luulisi kohteen olevan jo muiden nähtävissä.
+  }
+
   Future<void> _openKeyScreen() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -344,7 +381,16 @@ class _MapScreenState extends State<MapScreen> {
                       padding: const EdgeInsets.all(50),
                       onMarkerTap: (marker) {
                         final spot = _spotsByKey[marker.key];
-                        if (spot != null) SpotDetailsSheet.show(context, spot);
+                        if (spot != null) {
+                          SpotDetailsSheet.show(
+                            context,
+                            spot,
+                            contributions: _canContribute
+                                ? widget.contributions
+                                : null,
+                            location: _canContribute ? _location : null,
+                          );
+                        }
                       },
                       builder: (context, markers) =>
                           ClusterIcon(count: markers.length),
@@ -388,9 +434,23 @@ class _MapScreenState extends State<MapScreen> {
               Positioned(
                 right: 12,
                 bottom: AttributionBar.height + 12,
-                child: _TrackingButton(
-                  mode: _tracking,
-                  onPressed: _toggleTracking,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_canContribute) ...[
+                      FloatingActionButton.small(
+                        heroTag: 'add-spot',
+                        tooltip: 'Ilmoita uusi invapaikka',
+                        onPressed: _openAddSpot,
+                        child: const Icon(Icons.add_location_alt_outlined),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    _TrackingButton(
+                      mode: _tracking,
+                      onPressed: _toggleTracking,
+                    ),
+                  ],
                 ),
               ),
               // Attribuutio on lisenssiehto, joten se pidetään aina näkyvissä

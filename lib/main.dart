@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'config.dart';
 import 'data/spot_data_source.dart';
+import 'services/contribution_service.dart';
 import 'services/data_updater.dart';
 import 'services/map_key_store.dart';
 import 'ui/map_screen.dart';
@@ -49,6 +51,7 @@ class _EsteriAppState extends State<EsteriApp> {
             keyStore: services.keyStore,
             dataSource: services.dataSource,
             updater: services.updater,
+            contributions: services.contributions,
           );
         },
       ),
@@ -57,18 +60,30 @@ class _EsteriAppState extends State<EsteriApp> {
 }
 
 class AppServices {
-  AppServices(this.dataSource, this.keyStore, this.updater);
+  AppServices(this.dataSource, this.keyStore, this.updater, this.contributions);
 
   final SpotDataSource dataSource;
   final MapKeyStore keyStore;
   final DataUpdater updater;
+
+  /// Null, kun taustapalvelua ei ole määritetty tähän käännökseen. Silloin
+  /// ilmoitustoiminnot jäävät pois käyttöliittymästä kokonaan.
+  final ContributionService? contributions;
 
   static Future<AppServices> create() async {
     // Aineiston asennus ja avaimen lataus ovat riippumattomia, joten
     // ne tehdään rinnakkain.
     final dataSource = SpotDataSource.open();
     final keyStore = MapKeyStore.load();
-    final services = AppServices(await dataSource, await keyStore, DataUpdater());
+    final contributions = Config.contributionsEnabled
+        ? ContributionService.load()
+        : null;
+    final services = AppServices(
+      await dataSource,
+      await keyStore,
+      DataUpdater(),
+      await contributions,
+    );
 
     // Päivitystä ei odoteta: kartta avautuu heti mukana tulleella tai
     // aiemmin ladatulla aineistolla, ja tuoreempi vaihtuu tilalle taustalla

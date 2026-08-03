@@ -72,20 +72,27 @@ ParkingSpot spotAt(
   double lat,
   double lon, {
   String uid = 'osm:1',
+  String source = 'osm',
   SpotPrecision precision = SpotPrecision.space,
   int? capacity,
   String? name,
   String? address,
+  SpotVerification verification = SpotVerification.curated,
+  int confirmations = 0,
+  int disputes = 0,
 }) => ParkingSpot(
   id: 1,
   uid: uid,
-  source: 'osm',
+  source: source,
   lat: lat,
   lon: lon,
   precision: precision,
   capacity: capacity,
   name: name,
   address: address,
+  verification: verification,
+  confirmations: confirmations,
+  disputes: disputes,
 );
 
 Future<MapKeyStore> fakeKeyStore({String? key}) async {
@@ -97,13 +104,16 @@ Future<MapKeyStore> fakeKeyStore({String? key}) async {
 
 /// Ohjattava sijaintilähde: testi päättää luvan ja syöttää sijainnit itse.
 class FakeLocationService implements LocationService {
-  FakeLocationService({this.denial, this.first});
+  FakeLocationService({this.denial, this.first, this.accuracyM = 8});
 
   /// Kun tämä on annettu, [ensureAvailable] hylkää seurannan.
   final LocationDenial? denial;
 
   /// Ensimmäinen mittaus, jonka [current] palauttaa. Null = mittaus ei onnistu.
   final LatLng? first;
+
+  /// Mittauksen tarkkuus metreinä. Ilmoituksen lähetys hylkää liian huonon.
+  final double? accuracyM;
 
   final _controller = StreamController<LatLng>.broadcast();
   int subscriptions = 0;
@@ -113,10 +123,13 @@ class FakeLocationService implements LocationService {
   Future<LocationDenial?> ensureAvailable() async => denial;
 
   @override
-  Future<LatLng> current() async {
+  Future<LatLng> current() async => (await currentFix()).position;
+
+  @override
+  Future<PositionFix> currentFix() async {
     final position = first;
     if (position == null) throw Exception('sijaintia ei saatavilla');
-    return position;
+    return PositionFix(position, accuracyM);
   }
 
   @override

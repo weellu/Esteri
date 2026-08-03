@@ -19,14 +19,33 @@ PRECISION_AREA = "area"    # alueen keskipiste, ruudun tarkka sijainti tuntemato
 
 _PRECISION_RANK = {PRECISION_SPACE: 3, PRECISION_SIGN: 2, PRECISION_AREA: 1}
 
+# Mistä kohteen olemassaolo tiedetään. Eri asia kuin precision, joka kertoo
+# vain sijainnin tarkkuuden: käyttäjän ilmoittama paikka voi olla sijainniltaan
+# tarkka mutta silti vahvistamaton, ja kunnan rekisterissä oleva paikka voi
+# olla sijainniltaan epätarkka mutta olemassaolostaan varma.
+#
+# None tarkoittaa avoimesta aineistosta peräisin olevaa kohdetta. Se on
+# oletus, eikä sitä kirjoiteta ulostuloon lainkaan — 2 787 kohteen tiedostossa
+# turha kenttä maksaa enemmän kuin kertoo.
+VERIFICATION_REPORTED = "reported"    # yhden käyttäjän ilmoitus, ei vahvistusta
+VERIFICATION_CONFIRMED = "confirmed"  # useampi laite vahvistanut paikan päällä
+
+_VERIFICATIONS = (None, VERIFICATION_REPORTED, VERIFICATION_CONFIRMED)
+
 # Lähteen luotettavuus metatiedoissa. Kuntien omat rekisterit ovat tarkempia
 # ja tuoreempia kuin OSM; Digiroadissa on lähinnä merkin olemassaolo.
+#
+# Käyttäjälähde on pohjalla tarkoituksella. Jos käyttäjän ilmoitus osuu samaan
+# paikkaan avoimen aineiston kohteen kanssa, avoin aineisto voittaa sekä
+# sijainnin että metatiedot — ilmoitus muuttuu tällöin vahvistukseksi, ei
+# kilpailevaksi kohteeksi.
 _AUTHORITY_RANK = {
     "tampere": 4,
     "turku": 4,
     "helsinki": 4,
     "osm": 2,
     "digiroad": 1,
+    "users": 0,
 }
 
 
@@ -44,6 +63,12 @@ class ParkingSpot:
     max_duration_h: Optional[float] = None
     fee: Optional[bool] = None
     updated: Optional[str] = None
+    verification: Optional[str] = None
+    # Käyttäjien maastossa antamat signaalit. Täytetään signals.py:ssä
+    # deduplikoinnin jälkeen, koska ne kohdistuvat lopulliseen kohteeseen
+    # eivätkä yksittäiseen havaintoon.
+    confirmations: Optional[int] = None
+    disputes: Optional[int] = None
     extras: dict[str, Any] = field(default_factory=dict)
     # Täytetään deduplikoinnissa: mistä lähteistä tämä kohde on koostettu.
     merged_from: list[str] = field(default_factory=list)
@@ -51,6 +76,8 @@ class ParkingSpot:
     def __post_init__(self) -> None:
         if self.precision not in _PRECISION_RANK:
             raise ValueError(f"tuntematon precision: {self.precision!r}")
+        if self.verification not in _VERIFICATIONS:
+            raise ValueError(f"tuntematon verification: {self.verification!r}")
         if not (-90 <= self.lat <= 90) or not (-180 <= self.lon <= 180):
             raise ValueError(f"koordinaatti alueen ulkopuolella: {self.lat}, {self.lon}")
         if self.capacity is not None and self.capacity < 0:
@@ -70,6 +97,10 @@ class ParkingSpot:
 
 
 # Metatietokentät, jotka voidaan periä toisesta lähteestä yhdistettäessä.
+#
+# `verification` ei ole listalla eikä saa olla: se seuraa ankkuria. Perittynä
+# yhden käyttäjän ilmoitus tarttuisi kuntarekisterin kohteeseen ja merkitsisi
+# varman paikan vahvistamattomaksi — tai päinvastoin.
 _MERGEABLE_FIELDS = (
     "capacity",
     "name",

@@ -23,6 +23,9 @@ void main() {
       Object? name,
       Object? address,
       String precision = 'space',
+      // Vahvistussarakkeet annetaan erikseen, jotta perusrivi pysyy sellaisena
+      // kuin se on vanhemmassa aineistotiedostossa: sarakkeita ei ole lainkaan.
+      Map<String, Object?> extra = const {},
     }) =>
         {
           'id': 1,
@@ -38,6 +41,7 @@ void main() {
           'max_duration_h': null,
           'fee': fee,
           'updated': null,
+          ...extra,
         };
 
     test('lukee kentät oikein', () {
@@ -86,12 +90,75 @@ void main() {
         expect(ParkingSpot.fromRow(row(precision: 'area')).title,
             'Pysäköintialue, jolla invapaikkoja');
       });
+
+      test('käyttäjän ilmoittamaa ei kuvata pysäköintialueeksi', () {
+        // Ilmoituksen sijainti on epätarkka, joten se tallentuu alueena —
+        // mutta "Pysäköintialue, jolla invapaikkoja" olisi silti väärä lupaus
+        // yhdestä ilmoitetusta ruudusta.
+        final spot = ParkingSpot.fromRow(
+          row(precision: 'area', extra: {'verification': 'reported'}),
+        );
+        expect(spot.title, 'Käyttäjän ilmoittama invapaikka');
+      });
+    });
+
+    group('vahvistuskentät', () {
+      test('puuttuvat sarakkeet luetaan avoimeksi aineistoksi', () {
+        // Sarakkeet lisättiin skeemaversiota nostamatta, joten vanhassa
+        // tiedostossa niitä ei ole lainkaan. Se ei saa kaataa lukemista
+        // eikä merkitä kohteita vahvistamattomiksi.
+        final spot = ParkingSpot.fromRow(row());
+        expect(spot.verification, SpotVerification.curated);
+        expect(spot.confirmations, 0);
+        expect(spot.disputes, 0);
+      });
+
+      test('lukee vahvistusten ja kiistojen määrät', () {
+        final spot = ParkingSpot.fromRow(row(extra: {
+          'verification': 'confirmed',
+          'confirmations': 3,
+          'disputes': 1,
+        }));
+        expect(spot.verification, SpotVerification.confirmed);
+        expect(spot.confirmations, 3);
+        expect(spot.disputes, 1);
+      });
+    });
+  });
+
+  group('SpotVerification.parse', () {
+    test('tyhjä arvo tarkoittaa avointa aineistoa', () {
+      expect(SpotVerification.parse(null), SpotVerification.curated);
+    });
+
+    test('tunnistaa pipelinen tuottamat arvot', () {
+      expect(SpotVerification.parse('reported'), SpotVerification.reported);
+      expect(SpotVerification.parse('confirmed'), SpotVerification.confirmed);
+    });
+
+    test('tuntematon arvo tulkitaan vahvistamattomaksi, ei varmaksi', () {
+      // Päinvastainen oletus lupaisi käyttäjälle varmuutta, jota tämä
+      // sovellusversio ei osaa todentaa.
+      expect(SpotVerification.parse('jotain-uutta'), SpotVerification.reported);
+    });
+
+    test('vain avoin aineisto ei ole käyttäjiltä peräisin', () {
+      expect(SpotVerification.curated.isFromUsers, isFalse);
+      expect(SpotVerification.reported.isFromUsers, isTrue);
+      expect(SpotVerification.confirmed.isFromUsers, isTrue);
     });
   });
 
   group('lähdenimet', () {
     test('jokaisella pipelinen lähteellä on näyttönimi', () {
-      for (final source in ['osm', 'digiroad', 'tampere', 'turku', 'helsinki']) {
+      for (final source in [
+        'osm',
+        'digiroad',
+        'tampere',
+        'turku',
+        'helsinki',
+        'users',
+      ]) {
         expect(kSourceNames[source], isNotNull, reason: 'puuttuu: $source');
       }
     });

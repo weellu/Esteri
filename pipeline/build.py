@@ -24,12 +24,18 @@ from typing import Optional
 from .dedupe import deduplicate, stats_by_source
 from .model import ParkingSpot
 from .outputs import write_geojson, write_manifest, write_sqlite
+from .signals import STATE_PATH, apply_signals, load_state
 from .sources import SOURCES
 
 log = logging.getLogger("pipeline")
 
 DEFAULT_OUTPUT_DIR = Path("data")
 DEFAULT_CACHE_DIR = Path(".cache")
+
+# Lähteet, jotka luetaan levyltä eikä verkosta. Välimuisti on tarkoitettu
+# verkkohakujen välttämiseen kehityksessä; paikallisella lähteellä se vain
+# piilottaisi juuri tehdyn muutoksen seuraavalta --use-cache-ajolta.
+LOCAL_SOURCES = frozenset({"users"})
 
 
 def _cache_path(cache_dir: Path, name: str) -> Path:
@@ -58,7 +64,8 @@ def collect(
     failed: list[str] = []
 
     for name in names:
-        if use_cache:
+        local = name in LOCAL_SOURCES
+        if use_cache and not local:
             cached = _load_cache(cache_dir, name)
             if cached is not None:
                 log.info("%s: %d kohdetta välimuistista", name, len(cached))
@@ -72,7 +79,8 @@ def collect(
             log.error("%s epäonnistui: %s", name, exc)
             failed.append(name)
             continue
-        _save_cache(cache_dir, name, spots)
+        if not local:
+            _save_cache(cache_dir, name, spots)
         collected.extend(spots)
 
     return collected, failed
@@ -89,6 +97,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Käytä aiemmin haettua dataa verkon sijaan (kehitykseen)",
     )
     parser.add_argument("--no-dedupe", action="store_true", help="Ohita deduplikointi (vertailuun)")
+    parser.add_argument(
+        "--state",
+        type=Path,
+        default=STATE_PATH,
+        help="Moderoinnin tilatiedosto, josta käyttäjien vahvistukset luetaan",
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -105,6 +119,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     log.info("Raakahavainnot lähteittäin: %s", stats_by_source(raw))
 
     spots = raw if args.no_dedupe else deduplicate(raw)
+
+    # Vahvistukset liitetään vasta deduplikoinnin jälkeen: käyttäjä vahvisti
+    # sen kohteen, jonka näki sovelluksessa, ja se kohde syntyy vasta tässä.
+    apply_signals(spots, load_state(args.state)["signals"])
+
     spots.sort(key=lambda s: (s.lat, s.lon, s.uid))
 
     generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")

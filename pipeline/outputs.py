@@ -18,6 +18,15 @@ from .model import ParkingSpot
 
 log = logging.getLogger(__name__)
 
+# Skeemaversiota EI nosteta uusia sarakkeita lisättäessä.
+#
+# Sovellus vaatii julkaistulta aineistolta täsmälleen tukemansa version
+# (evaluateManifest), joten noston hinta on se, että vanhat sovellusversiot
+# lakkaavat pysyvästi saamasta datapäivityksiä. Sarakkeen lisääminen on
+# additiivinen muutos: kysely on `SELECT *` ja rivit luetaan nimetyistä
+# kentistä, joten vanha sovellus jättää uudet sarakkeet huomiotta.
+#
+# Nosta versio vasta, jos olemassa olevan kentän merkitys tai tyyppi muuttuu.
 SCHEMA_VERSION = 1
 
 # Aineisto sisältää OpenStreetMap-dataa, joten yhdistelmä on ODbL:n
@@ -26,7 +35,8 @@ SCHEMA_VERSION = 1
 LICENSE = "ODbL-1.0"
 ATTRIBUTION = (
     "© OpenStreetMap-tekijät (ODbL), © Väylävirasto (CC BY 4.0), "
-    "© Tampereen kaupunki, © Turun kaupunki, © Helsingin kaupunki"
+    "© Tampereen kaupunki, © Turun kaupunki, © Helsingin kaupunki, "
+    "© Esterin käyttäjät (ODbL)"
 )
 
 
@@ -122,7 +132,10 @@ def write_sqlite(spots: list[ParkingSpot], path: Path, *, generated_at: str) -> 
                 max_duration_h REAL,
                 fee            INTEGER,
                 updated        TEXT,
-                merged_from    TEXT
+                merged_from    TEXT,
+                verification   TEXT,
+                confirmations  INTEGER,
+                disputes       INTEGER
             )
             """
         )
@@ -144,11 +157,14 @@ def write_sqlite(spots: list[ParkingSpot], path: Path, *, generated_at: str) -> 
                 None if spot.fee is None else int(spot.fee),
                 spot.updated,
                 ",".join(spot.merged_from) or None,
+                spot.verification,
+                spot.confirmations,
+                spot.disputes,
             )
             for index, spot in enumerate(spots, start=1)
         ]
         conn.executemany(
-            "INSERT INTO spots VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO spots VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             rows,
         )
 

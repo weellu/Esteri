@@ -23,6 +23,21 @@ enum LocationDenial {
   permissionDeniedForever,
 }
 
+/// Sijainti ja sen mitattu tarkkuus.
+///
+/// Kartan seuranta ei tarkkuudesta piittaa, mutta ilmoituksen lähettäminen
+/// piittaa: sadan metrin heitolla tehty ilmoitus kohdistuu käytännössä
+/// satunnaiseen paikkaan, ja se on parempi kertoa käyttäjälle heti kuin
+/// hylätä hiljaa moderoinnissa.
+class PositionFix {
+  const PositionFix(this.position, this.accuracyM);
+
+  final LatLng position;
+
+  /// Vaakatarkkuus metreinä, tai null jos laite ei kerro sitä.
+  final double? accuracyM;
+}
+
 abstract class LocationService {
   /// Varmistaa sijaintipalvelut ja luvan. Palauttaa `null`, kun seurannan voi
   /// aloittaa, muussa tapauksessa esteen syyn.
@@ -30,6 +45,9 @@ abstract class LocationService {
 
   /// Yksittäinen sijainti seurannan aloitushetkeen.
   Future<LatLng> current();
+
+  /// Yksittäinen mittaus tarkkuustiedon kanssa, ilmoituksen lähettämistä varten.
+  Future<PositionFix> currentFix();
 
   /// Jatkuvat sijaintipäivitykset. Seuranta päättyy, kun tilaus peruutetaan.
   Stream<LatLng> positions();
@@ -66,9 +84,15 @@ class GeolocatorLocationService implements LocationService {
   }
 
   @override
-  Future<LatLng> current() async {
+  Future<LatLng> current() async => (await currentFix()).position;
+
+  @override
+  Future<PositionFix> currentFix() async {
     final position = await Geolocator.getCurrentPosition();
-    return LatLng(position.latitude, position.longitude);
+    return PositionFix(
+      LatLng(position.latitude, position.longitude),
+      position.accuracy,
+    );
   }
 
   @override

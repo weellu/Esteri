@@ -11,6 +11,10 @@ on:
       - "pipeline/**"
       - "tests/**"
       - ".github/workflows/build-data.yml"
+      # Hyväksytty moderointi-PR julkaistaan heti eikä vasta seuraavana
+      # maanantaina: ilmoituksen tehnyt käyttäjä näkee paikkansa aineistossa
+      # päivien eikä viikkojen päästä.
+      - "contributions/**"
 
 permissions:
   contents: read

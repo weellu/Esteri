@@ -3,7 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:esteri/data/parking_spot.dart';
 import 'package:esteri/ui/spot_marker.dart';
 
-ParkingSpot spotWith(SpotPrecision precision, {String? name}) => ParkingSpot(
+ParkingSpot spotWith(
+  SpotPrecision precision, {
+  String? name,
+  SpotVerification verification = SpotVerification.curated,
+  int confirmations = 0,
+}) =>
+    ParkingSpot(
       id: 1,
       uid: 'osm:node/1',
       source: 'osm',
@@ -11,7 +17,18 @@ ParkingSpot spotWith(SpotPrecision precision, {String? name}) => ParkingSpot(
       lon: 24.94,
       precision: precision,
       name: name,
+      verification: verification,
+      confirmations: confirmations,
     );
+
+/// Markerin oman kehyksen koristelu. Vahvistamattomalla kohteella on lisäksi
+/// kulmatunnus, joten pelkkä "ensimmäinen reunallinen" ei riitä erotteluksi
+/// ilman tätä järjestysoletusta: kehys piirtyy Stackissa ennen tunnusta.
+BoxDecoration markerDecoration(WidgetTester tester) => tester
+    .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+    .map((w) => w.decoration)
+    .whereType<BoxDecoration>()
+    .firstWhere((d) => d.border != null);
 
 void main() {
   group('SpotVisuals', () {
@@ -27,6 +44,70 @@ void main() {
 
     test('alueen selite kertoo ettei tarkkaa kohtaa tiedetä', () {
       expect(SpotVisuals.explain(SpotPrecision.area), contains('keskipiste'));
+    });
+
+    test('vahvistamaton erottuu väriltään molemmista tarkkuustasoista', () {
+      final reported = SpotVisuals.colorFor(
+        SpotPrecision.space,
+        SpotVerification.reported,
+      );
+      expect(reported, isNot(SpotVisuals.colorFor(SpotPrecision.space)));
+      expect(reported, isNot(SpotVisuals.colorFor(SpotPrecision.area)));
+    });
+
+    test('vahvistamattoman väri ei riipu tarkkuudesta', () {
+      // Ilmoituksessa kysymys ei ole sijainnin tarkkuudesta vaan siitä, onko
+      // paikkaa lainkaan — tarkkuuden mukaan värjääminen sekoittaisi nämä.
+      final colors = SpotPrecision.values
+          .map((p) => SpotVisuals.colorFor(p, SpotVerification.reported))
+          .toSet();
+      expect(colors, {SpotVisuals.unverified});
+    });
+
+    test('vahvistettu kohde värjätään kuin avoin aineisto', () {
+      for (final precision in SpotPrecision.values) {
+        expect(
+          SpotVisuals.colorFor(precision, SpotVerification.confirmed),
+          SpotVisuals.colorFor(precision),
+          reason: 'vahvistettua ei ole syytä esittää epävarmempana',
+        );
+      }
+    });
+
+    test('avoimen aineiston selite pysyy tarkkuuden selitteenä', () {
+      final spot = spotWith(SpotPrecision.area);
+      expect(SpotVisuals.explainSpot(spot), SpotVisuals.explain(SpotPrecision.area));
+    });
+
+    test('vahvistamattoman selite puhuu ilmoituksesta, ei alueesta', () {
+      final spot = spotWith(
+        SpotPrecision.area,
+        verification: SpotVerification.reported,
+      );
+      final text = SpotVisuals.explainSpot(spot);
+      expect(text, contains('vahvistanut'));
+      expect(text, isNot(contains('keskipiste')),
+          reason: 'alueen selite lupaisi väärää asiaa yhdestä ilmoituksesta');
+    });
+
+    test('vahvistetun selite kertoo vahvistajien määrän', () {
+      final spot = spotWith(
+        SpotPrecision.space,
+        verification: SpotVerification.confirmed,
+        confirmations: 4,
+      );
+      expect(SpotVisuals.explainSpot(spot), contains('4'));
+    });
+
+    test('lyhyt selite erottaa kaikki kolme alkuperää', () {
+      final labels = {
+        SpotVisuals.shortLabelForSpot(spotWith(SpotPrecision.space)),
+        SpotVisuals.shortLabelForSpot(spotWith(SpotPrecision.space,
+            verification: SpotVerification.reported)),
+        SpotVisuals.shortLabelForSpot(spotWith(SpotPrecision.space,
+            verification: SpotVerification.confirmed)),
+      };
+      expect(labels.length, 3);
     });
   });
 
@@ -78,14 +159,62 @@ void main() {
         ),
       );
 
-      final decoration = tester
-          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
-          .map((w) => w.decoration)
-          .whereType<BoxDecoration>()
-          .firstWhere((d) => d.border != null);
-
-      expect(decoration.color, Colors.white,
+      expect(markerDecoration(tester).color, Colors.white,
           reason: 'epätarkka kohde ei saa näyttää yhtä vahvalta kuin tarkka');
+    });
+
+    testWidgets('vahvistamaton on läpikuultava vaikka tarkkuus olisi tarkka',
+        (tester) async {
+      // Täytetty merkki lupaa varmuutta, jota yhden käyttäjän ilmoituksella
+      // ei ole, vaikka sijainti olisi tallentunut tarkkana.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpotMarkerIcon(
+              spot: spotWith(SpotPrecision.space,
+                  verification: SpotVerification.reported),
+            ),
+          ),
+        ),
+      );
+
+      expect(markerDecoration(tester).color, Colors.white);
+    });
+
+    testWidgets('vahvistettu ei saa vahvistamattoman tunnusta', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpotMarkerIcon(
+              spot: spotWith(SpotPrecision.space,
+                  verification: SpotVerification.confirmed, confirmations: 3),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('?'), findsNothing);
+    });
+
+    testWidgets('ruudunlukija kuulee alkuperän eikä tarkkuutta', (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpotMarkerIcon(
+              spot: spotWith(SpotPrecision.area,
+                  name: 'Tori', verification: SpotVerification.reported),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.bySemanticsLabel('Tori. Vahvistamaton ilmoitus'), findsOneWidget);
+      // Kulmatunnus on visuaalinen toisto samasta tiedosta. Ruudunlukijalle se
+      // olisi pelkkä irrallinen "?" otsikon perässä.
+      expect(tester.getSemantics(find.byType(SpotMarkerIcon)).label,
+          isNot(contains('?')));
+      handle.dispose();
     });
   });
 
@@ -112,6 +241,17 @@ void main() {
       expect(find.text('Tarkka paikka'), findsOneWidget);
       expect(find.text('Liikennemerkki'), findsOneWidget);
       expect(find.text('Alueella invapaikkoja'), findsOneWidget);
+    });
+
+    testWidgets('selittää myös vahvistamattoman ilmoituksen', (tester) async {
+      // Käyttäjä näkee kartalla oranssin kysymysmerkin — selitteen on
+      // kerrottava mitä se tarkoittaa, muuten merkki on pelkkä häiriö.
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: MapLegend())),
+      );
+
+      expect(find.text('Vahvistamaton ilmoitus'), findsOneWidget);
+      expect(find.text('?'), findsOneWidget);
     });
   });
 }

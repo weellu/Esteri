@@ -1,0 +1,24 @@
+name = "esteri-api"
+main = "src/worker.js"
+compatibility_date = "2025-09-01"
+
+# Ilmaistasolla riittää yksi Worker ja yksi D1-kanta. Mitoitus: 100 000
+# pyyntöä ja 100 000 kirjoitettua riviä vuorokaudessa. Karkea arvio
+# käytöstä — 10 000 käyttäjää, kaksi vahvistusta viikossa — on noin
+# 3 000 kirjoitusta vuorokaudessa eli kolmisen prosenttia kiintiöstä.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "esteri"
+# Täytä `wrangler d1 create esteri` -komennon tulostamalla tunnisteella.
+database_id = "TAYTA_TAMA"
+
+# Salaisuudet asetetaan erikseen eikä tähän tiedostoon:
+#   wrangler secret put MODERATION_TOKEN   # moderointiajon lukuoikeus
+#   wrangler secret put IP_SALT            # rate limitin IP-tiivisteen suola
+#
+# IP_SALT ei ole vaihdettavissa jälkikäteen menettämättä kuluvan vuorokauden
+# rate limit -laskureita. Se on hyväksyttävää: laskurit vanhenevat itsestään.
+
+[observability]
+enabled = true

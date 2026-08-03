@@ -71,4 +71,33 @@ class Config {
   /// alle 3 000 kohdetta, joten raja ei käytännössä osu — se on suoja
   /// aineiston kasvaessa.
   static const int maxSpotsPerViewport = 2000;
+
+  /// Käyttäjien ilmoitusten vastaanotto (Cloudflare Worker, ks. `backend/`).
+  ///
+  /// **Tyhjä oletusarvo on tarkoituksellinen.** Kun osoitetta ei ole, sovellus
+  /// piilottaa vahvistus- ja lisäysnapit kokonaan — nappi, joka lähettää
+  /// olemattomaan osoitteeseen, on huonompi kuin ei nappia lainkaan. Täytä
+  /// tämä `wrangler deploy`n jälkeen tai anna käännösaikana:
+  ///
+  ///     flutter run --dart-define=ESTERI_API=https://<worker>.workers.dev
+  ///
+  /// Lähetys ei kuulu lukupolkuun: kartta, haku ja navigointi toimivat
+  /// ilman tätä palvelua täsmälleen kuten ennenkin.
+  static const String contributionApiBase = String.fromEnvironment(
+    'ESTERI_API',
+  );
+
+  static bool get contributionsEnabled => contributionApiBase.isNotEmpty;
+
+  static String get contributionSubmitUrl =>
+      '$contributionApiBase/v1/submissions';
+
+  /// Kulkee lähetyksen mukana, jotta rikkinäisen version tuottamat ilmoitukset
+  /// voi tunnistaa jälkikäteen. Pidä sama kuin pubspec.yamlin version.
+  static const String appVersion = '1.0.1';
+
+  /// Paikannustarkkuus, jota huonommalla ilmoitusta ei kannata lähettää.
+  /// Sama raja kuin moderoinnissa (`pipeline/moderate.py`), jotta käyttäjälle
+  /// kerrotaan heti eikä hylätä hiljaa vasta palvelimella.
+  static const double maxSubmitAccuracyM = 50;
 }

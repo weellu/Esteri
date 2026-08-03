@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Callable
 
 from ..model import ParkingSpot
-from . import digiroad, helsinki, osm, tampere, turku
+from . import digiroad, helsinki, osm, tampere, turku, users
 
 SOURCES: dict[str, Callable[[], list[ParkingSpot]]] = {
     "osm": osm.fetch_all,
@@ -18,6 +18,7 @@ SOURCES: dict[str, Callable[[], list[ParkingSpot]]] = {
     "tampere": tampere.fetch_all,
     "turku": turku.fetch_all,
     "helsinki": helsinki.fetch_all,
+    "users": users.fetch_all,
 }
 
-__all__ = ["SOURCES", "digiroad", "helsinki", "osm", "tampere", "turku"]
+__all__ = ["SOURCES", "digiroad", "helsinki", "osm", "tampere", "turku", "users"]

@@ -34,7 +34,26 @@ Nämä ovat lisenssiehtoja, eivät kohteliaisuutta.
 | Tampere | © Tampereen kaupunki | CC BY 4.0 |
 | Turku | © Turun kaupunki | CC BY 4.0 |
 | Helsinki | © Helsingin kaupunki | CC BY 4.0 |
+| Sovelluksen käyttäjät | © Esterin käyttäjät | ODbL 1.0 |
 | Karttatiilet ja geokoodaus | © Maanmittauslaitos | MML:n avoimen datan lisenssi |
+
+## Käyttäjien ilmoitukset
+
+Käyttäjien lähettämät paikat ja vahvistukset päätyvät samaan julkaistavaan
+aineistoon, joten ne ovat ODbL:n alaisia siinä missä muukin. Käytännössä tämä
+tarkoittaa, että **ilmoituksen lähettäminen luovuttaa sen avoimeen aineistoon**
+— sitä ei voi jälkikäteen ottaa pois, koska aineisto on jo levinnyt eteenpäin.
+Tämä on kerrottava käyttäjälle ennen lähetystä, ei sen jälkeen.
+
+Ilmoituksesta ei tallenneta lähettäjää: laitetunniste on satunnainen UUID, joka
+jää taustapalveluun eikä päädy julkaistuun aineistoon lainkaan. Siksi ODbL:n
+edellyttämä attribuutio on kollektiivinen ("© Esterin käyttäjät") eikä
+nimeäminen ole mahdollista — eikä tarpeen, koska yksittäinen koordinaatti ei
+yllä teoskynnykseen.
+
+Käyttäjän kirjoittama saateteksti **ei mene aineistoon**. Se näkyy vain
+moderoinnin PR-kuvauksessa. Moderoimaton vapaa teksti ODbL-aineistossa leviäisi
+eteenpäin kaikkiin sitä käyttäviin palveluihin, eikä sitä saisi enää pois.
 
 ### Miten attribuutio on toteutettu
 

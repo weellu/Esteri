@@ -1,0 +1,102 @@
+name: Kokoa käyttäjien lähetykset moderoitavaksi
+
+on:
+  schedule:
+    # Perjantaisin klo 04:00 UTC. PR ehtii viikonlopun yli katsottavaksi
+    # ennen kuin maanantain julkaisuajo poimii hyväksytyt kohteet mukaan.
+    - cron: "0 4 * * 5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Kaksi rinnakkaista ajoa kirjoittaisi saman tilatiedoston eri lukukohdilla,
+# jolloin osa lähetyksistä katoaisi tai käsiteltäisiin kahdesti.
+concurrency:
+  group: moderate
+  cancel-in-progress: false
+
+jobs:
+  moderate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Hae julkaistu aineisto vertailukohdaksi
+        # Vertailu tehdään nimenomaan julkaistua aineistoa vasten, koska juuri
+        # sen käyttäjä näki lähettäessään. Uudelleenrakentaminen tässä antaisi
+        # eri vastauksen kuin mitä käyttäjä katsoi.
+        #
+        # Osoite johdetaan repon nimestä eikä kirjoiteta käsin: repon
+        # uudelleennimeäminen jättäisi kovakoodatun osoitteen osoittamaan
+        # tyhjään, ja moderointi vertaisi lähetyksiä olemattomaan aineistoon.
+        run: |
+          mkdir -p data
+          curl -sSfL --retry 3 \
+            "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/invapaikat.geojson" \
+            -o data/invapaikat.geojson
+          python -c "import json;d=json.load(open('data/invapaikat.geojson'));print('Vertailuaineisto:',d['metadata']['count'],'kohdetta')"
+
+      - name: Hae lähetysjono
+        env:
+          MODERATION_TOKEN: ${{ secrets.MODERATION_TOKEN }}
+          API_BASE: ${{ vars.CONTRIBUTION_API_BASE }}
+        run: |
+          if [ -z "$MODERATION_TOKEN" ] || [ -z "$API_BASE" ]; then
+            echo "::error::MODERATION_TOKEN tai CONTRIBUTION_API_BASE puuttuu."
+            exit 1
+          fi
+          since=$(python -c "
+          import json,pathlib
+          p=pathlib.Path('contributions/tila.json')
+          print(json.loads(p.read_text())['high_water_mark'] if p.exists() else 0)
+          ")
+          echo "Luetaan lähetykset id:stä $since eteenpäin"
+          curl -sSfL --retry 3 \
+            -H "Authorization: Bearer $MODERATION_TOKEN" \
+            "$API_BASE/v1/queue?since=$since&limit=2000" \
+            -o queue.json
+          python -c "import json;print('Lähetyksiä:',len(json.load(open('queue.json'))['submissions']))"
+
+      - name: Käsittele lähetykset
+        run: |
+          python -m pipeline.moderate \
+            --queue queue.json \
+            --dataset data/invapaikat.geojson \
+            --report pr-body.md \
+            --verbose
+
+      - name: Avaa tai päivitä PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Lisätään ensin indeksiin ja verrataan vasta sitten. Pelkkä
+          # `git diff` ei näe versioimattomia tiedostoja, joten ensimmäinen ajo
+          # — jolloin contributions/ vasta syntyy — näyttäisi muutoksettomalta.
+          git add -A contributions
+          if git diff --cached --quiet -- contributions; then
+            echo "Ei muutoksia moderoitavaksi."
+            exit 0
+          fi
+
+          branch="moderointi/$(date -u +%Y-%m-%d)"
+          git checkout -B "$branch"
+          git commit -m "Käyttäjien lähetykset $(date -u +%Y-%m-%d)"
+          git push --force-with-lease -u origin "$branch"
+
+          # Saman päivän uusintaajo päivittää olemassa olevan PR:n rungon
+          # sen sijaan että kaatuisi "already exists" -virheeseen.
+          if ! gh pr create \
+                --title "Käyttäjien lähetykset $(date -u +%Y-%m-%d)" \
+                --body-file pr-body.md \
+                --base main --head "$branch"; then
+            gh pr edit "$branch" --body-file pr-body.md
+          fi

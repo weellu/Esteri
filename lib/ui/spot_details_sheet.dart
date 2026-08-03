@@ -1,28 +1,52 @@
 import 'package:flutter/material.dart';
 
 import '../data/parking_spot.dart';
+import '../services/contribution_service.dart';
+import '../services/location_service.dart';
 import '../services/navigation_launcher.dart';
+import 'contribution_actions.dart';
 import 'spot_marker.dart';
 
 /// Kohteen tiedot ja navigointipainike.
 class SpotDetailsSheet extends StatelessWidget {
-  const SpotDetailsSheet({super.key, required this.spot});
+  const SpotDetailsSheet({
+    super.key,
+    required this.spot,
+    this.contributions,
+    this.location,
+  });
 
   final ParkingSpot spot;
 
-  static Future<void> show(BuildContext context, ParkingSpot spot) {
+  /// Kun molemmat on annettu, kohteen voi vahvistaa tai kiistää. Ilman niitä
+  /// näkymä on entisellään — lähetys on lisäominaisuus, ei ehto.
+  final ContributionService? contributions;
+  final LocationService? location;
+
+  static Future<void> show(
+    BuildContext context,
+    ParkingSpot spot, {
+    ContributionService? contributions,
+    LocationService? location,
+  }) {
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => SpotDetailsSheet(spot: spot),
+      builder: (context) => SpotDetailsSheet(
+        spot: spot,
+        contributions: contributions,
+        location: location,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isApproximate = spot.precision == SpotPrecision.area;
+    final isApproximate =
+        spot.precision == SpotPrecision.area ||
+        spot.verification == SpotVerification.reported;
 
     return SafeArea(
       child: Padding(
@@ -55,7 +79,7 @@ class SpotDetailsSheet extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      SpotVisuals.explain(spot.precision),
+                      SpotVisuals.explainSpot(spot),
                       style: theme.textTheme.bodyMedium,
                     ),
                   ),
@@ -88,6 +112,24 @@ class SpotDetailsSheet extends StatelessWidget {
             if (spot.restrictions != null)
               _DetailRow(Icons.info_outline, spot.restrictions!),
 
+            // Käyttäjien maastohavainnot. Kiisto näytetään yhtä näkyvästi kuin
+            // vahvistus: tieto siitä, ettei paikkaa löytynyt, on autoilijalle
+            // vähintään yhtä hyödyllinen.
+            if (spot.confirmations > 0)
+              _DetailRow(
+                Icons.verified_outlined,
+                spot.confirmations == 1
+                    ? '1 käyttäjä on vahvistanut paikan päällä'
+                    : '${spot.confirmations} käyttäjää on vahvistanut paikan päällä',
+              ),
+            if (spot.disputes > 0)
+              _DetailRow(
+                Icons.report_gmailerrorred_outlined,
+                spot.disputes == 1
+                    ? '1 käyttäjä ei löytänyt paikkaa'
+                    : '${spot.disputes} käyttäjää ei löytänyt paikkaa',
+              ),
+
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: () async {
@@ -106,6 +148,13 @@ class SpotDetailsSheet extends StatelessWidget {
                 minimumSize: const Size.fromHeight(52),
               ),
             ),
+
+            if (contributions != null && location != null)
+              ContributionActions(
+                spot: spot,
+                contributions: contributions!,
+                location: location!,
+              ),
 
             const SizedBox(height: 12),
             Text(
@@ -149,9 +198,15 @@ class _DetailRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          Icon(
+            icon,
+            size: 20,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(width: 12),
-          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyMedium)),
+          Expanded(
+            child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
+          ),
         ],
       ),
     );

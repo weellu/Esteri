@@ -20,7 +20,7 @@ class AttributionBar extends StatelessWidget {
     final theme = Theme.of(context);
     final parts = [
       if (showMapTiles) 'Kartta © Maanmittauslaitos',
-      'Paikat © OpenStreetMap-tekijät (ODbL), Väylävirasto ja kunnat',
+      'Paikat © OpenStreetMap-tekijät (ODbL), Väylävirasto, kunnat ja käyttäjät',
     ];
 
     return Semantics(
@@ -29,9 +29,9 @@ class AttributionBar extends StatelessWidget {
       container: true,
       excludeSemantics: true,
       child: GestureDetector(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const LicensesScreen()),
-        ),
+        onTap: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute<void>(builder: (_) => const LicensesScreen())),
         child: Container(
           height: height,
           alignment: Alignment.center,

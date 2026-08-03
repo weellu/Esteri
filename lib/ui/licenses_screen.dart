@@ -36,7 +36,8 @@ class LicensesScreen extends StatelessWidget {
       title: 'Turun kaupunki',
       credit: '© Turun kaupunki',
       license: 'Creative Commons Nimeä 4.0 (CC BY 4.0)',
-      url: 'https://www.avoindata.fi/data/fi/dataset/turun-kaupungin-liikennemerkit',
+      url:
+          'https://www.avoindata.fi/data/fi/dataset/turun-kaupungin-liikennemerkit',
       note: 'Invapaikkojen liikennemerkit.',
     ),
     _LicenseEntry(
@@ -45,6 +46,15 @@ class LicensesScreen extends StatelessWidget {
       license: 'Creative Commons Nimeä 4.0 (CC BY 4.0)',
       url: 'https://hri.fi',
       note: 'Kantakaupungin invapysäköintipaikat.',
+    ),
+    _LicenseEntry(
+      title: 'Sovelluksen käyttäjät',
+      credit: '© Esterin käyttäjät',
+      license: 'Open Database License (ODbL) 1.0',
+      url: 'https://opendatacommons.org/licenses/odbl/1-0/',
+      note:
+          'Käyttäjien maastossa ilmoittamat ja vahvistamat paikat. '
+          'Ilmoituksen lähettäminen luovuttaa sen tähän avoimeen aineistoon.',
     ),
     _LicenseEntry(
       title: 'Maanmittauslaitos',

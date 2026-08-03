@@ -15,7 +15,7 @@ Tampereen, Turun ja Helsingin omat avoimet aineistot.
 | Haku osoitteella ja paikannimellä | Valmis |
 | Oman sijainnin seuranta | Valmis |
 | Datan päivitys verkosta | Valmis |
-| Käyttäjien lisäämät paikat | Ei aloitettu, vaatisi taustapalvelimen |
+| Käyttäjien lisäämät paikat ja vahvistukset | Valmis, odottaa Workerin deployta |
 
 ## Datapipeline
 
@@ -77,6 +77,17 @@ Yli puolet kohteista on alueen keskipisteitä. Sovellus ei saa esittää niitä
 samalla tavalla kuin tarkkoja ruutuja: autoilijalle "invapaikka tässä" ja
 "tällä pysäköintialueella on invapaikkoja" ovat eri lupaus.
 
+Tarkkuuden rinnalla kulkee **erillinen** kenttä `verification`, joka kertoo
+mistä kohteen olemassaolo tiedetään. Nämä eivät ole sama asia: kunnan
+rekisterissä oleva paikka voi olla sijainniltaan epätarkka mutta
+olemassaolostaan varma, ja käyttäjän ilmoittama päinvastoin.
+
+| `verification` | Mitä tarkoittaa |
+|---|---|
+| *(tyhjä)* | Avoimesta aineistosta |
+| `reported` | Yhden käyttäjän ilmoitus, ei vahvistusta |
+| `confirmed` | Vähintään kolme laitetta vahvistanut maastossa |
+
 Paikkamäärä tunnetaan 2 397 kohteelle, osoite vain 214:lle.
 
 ### Deduplikointi
@@ -130,7 +141,9 @@ Yksityiskohdat ja lähdekohtaiset velvoitteet: [`docs/lisenssit.md`](docs/lisens
 tuloksen GitHub Pagesiin. Julkaisu keskeytyy, jos kohteita on alle 1 500 —
 rajapinnan muutos ei saa korvata toimivaa aineistoa lähes tyhjällä.
 
-Kaikki maksutonta: GitHub Actions ja Pages riittävät, backendiä ei tarvita.
+Lukupolku on kokonaan maksuton ja staattinen: GitHub Actions ja Pages
+riittävät. Käyttäjien ilmoitusten vastaanottoon tarvitaan lisäksi pieni
+Worker, mutta sekin mahtuu ilmaistasolle moninkertaisesti — ks. alla.
 
 ## Sovellus
 
@@ -255,3 +268,82 @@ cp data/invapaikat.sqlite assets/data/
 Bundlattu kopio otetaan käyttöön vain jos se on **uudempi** kuin levyllä oleva.
 Vertailu on nimenomaan "uudempi", ei "eri" — muuten sovelluspäivitys
 ylikirjoittaisi verkosta ladatun tuoreemman aineiston joka käynnistyksellä.
+
+**Uusia sarakkeita lisättäessä skeemaversiota ei nosteta.** Sovellus vaatii
+julkaistulta aineistolta täsmälleen tukemansa version, joten noston hinta on
+se, että vanhat sovellusversiot lakkaavat pysyvästi saamasta datapäivityksiä.
+Sarakkeen lisääminen on additiivinen muutos, jonka vanha sovellus jättää
+huomiotta. Versio nostetaan vasta, jos olemassa olevan kentän merkitys muuttuu.
+
+## Käyttäjien ilmoitukset
+
+Kaksi toimintoa: kohteen vahvistaminen tai kiistäminen maastossa, ja uuden
+invapaikan ilmoittaminen. Molemmat vaativat sijainnin — ilmoituksen koko arvo
+on siinä, että joku on oikeasti seissyt paikan päällä.
+
+```
+sovellus ──POST──> Worker + D1 (backend/)
+                        │
+                  moderate.yml (pe)
+                        ↓
+              pipeline/moderate.py
+                        ↓
+         contributions/*.geojson ──PR──> ihminen ──merge──>
+                        ↓
+              build-data.yml ──> Pages ──> sovellus
+```
+
+**Kirjoitus on erotettu luvusta tarkoituksella.** Kartta, haku ja navigointi
+toimivat kokonaan ilman taustapalvelua, koska aineisto tulee staattisena
+tiedostona. Jos Worker on alhaalla, ilmoitus jää laitteen jonoon ja lähtee kun
+yhteys palaa — liikkeellä olevalle käyttäjälle "lähetys ei mennyt läpi" on eri
+asia kuin "sovellus ei toimi".
+
+### Työnjako
+
+Worker (`backend/`) on tarkoituksella tyhmä: muotovalidointi, rate limit ja
+saman laitteen toistojen karsinta. Kaikki harkintaa vaativa on
+`pipeline/moderate.py`:ssä, jossa on käytettävissä koko aineisto ja jota voi
+muuttaa ilman uutta deployta.
+
+| Ilmoitus | Käsittely | Ihmistyötä |
+|---|---|---|
+| Yli 100 m päässä kohteesta | Hylätään | ei |
+| Paikannustarkkuus yli 50 m | Hylätään jo laitteella | ei |
+| Alle 25 m tunnetusta kohteesta | Kirjataan vahvistukseksi | ei |
+| Alle 15 m toisesta ilmoituksesta | Yhdistetään, sijainti keskiarvoistuu | ei |
+| Kolmas eri laite samasta kohdasta | Nousee vahvistetuksi | ei |
+| Muu uusi paikka | Julkaistaan `reported`-tilassa | katselmointi |
+
+### Moderointi ei ole portti
+
+Yksittäinen ilmoitus julkaistaan heti vahvistamattomana, ja sovellus esittää
+sen erikseen merkittynä. Ihmisen tehtävä ei ole päättää onko paikka olemassa —
+sitä ei ruudulta näe — vaan poistaa ilkivalta. Jos moderointi olisi portti,
+jonon pituus kasvaisi suoraan sen mukaan ehtiikö kukaan katsoa sitä, ja
+ominaisuus kuolisi ensimmäiseen kiireiseen kuukauteen.
+
+Moderointi tapahtuu PR:ssä: GitHub piirtää `contributions/kayttajat.geojson`in
+kartaksi, joten pisteet näkee kartalla suoraan diffistä myös puhelimella.
+Hyväksyntä on merge, hylkäys on PR:n sulkeminen. Työmäärä on noin kymmenen
+minuuttia viikossa; jos se venyy, kynnystä kiristetään
+`CONFIRM_THRESHOLD`-vakiosta eikä jaksamalla enemmän.
+
+### Yksityisyys
+
+Ei tunnuksia eikä kirjautumista. Laitetunniste on sovelluksen arpoma
+satunnainen UUID, joka jää taustapalveluun eikä päädy julkaistuun aineistoon.
+IP-osoitetta ei tallenneta, vain rate limitiin käytettävä tiiviste, jonka suola
+vaihtuu vuorokausittain. Käyttäjän kirjoittama saateteksti näkyy vain
+moderoinnin PR-kuvauksessa eikä koskaan aineistossa.
+
+### Käyttöönotto
+
+Toiminnot ovat piilossa, kunnes taustapalvelun osoite on annettu — nappi, joka
+lähettää olemattomaan osoitteeseen, on huonompi kuin ei nappia lainkaan.
+
+```bash
+flutter run --dart-define=ESTERI_API=https://<worker>.workers.dev
+```
+
+Workerin pystytys ja tarvittavat GitHub-salaisuudet: [`backend/README.md`](backend/README.md).
