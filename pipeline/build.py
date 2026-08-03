@@ -24,6 +24,7 @@ from typing import Optional
 from .dedupe import deduplicate, stats_by_source
 from .model import ParkingSpot
 from .outputs import write_geojson, write_manifest, write_sqlite
+from .exclusions import EXCLUSIONS_PATH, apply_exclusions, load_exclusions
 from .signals import STATE_PATH, apply_signals, demote_disputed, load_state
 from .sources import SOURCES
 
@@ -103,6 +104,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         default=STATE_PATH,
         help="Moderoinnin tilatiedosto, josta käyttäjien vahvistukset luetaan",
     )
+    parser.add_argument(
+        "--exclusions",
+        type=Path,
+        default=EXCLUSIONS_PATH,
+        help="Ylläpitäjän poistolista",
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -128,6 +135,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     # kiistojen lopulliset luvut, ja käyttäjän kohteella osa vahvistuksista
     # tulee lähteestä ja osa signaaleista.
     spots, _, _ = demote_disputed(spots)
+
+    # Ylläpitäjän poistot viimeisenä: ne ovat ihmisen tekemiä päätöksiä ja
+    # ohittavat kaiken automatiikan.
+    spots, _, _ = apply_exclusions(spots, load_exclusions(args.exclusions))
 
     spots.sort(key=lambda s: (s.lat, s.lon, s.uid))
 

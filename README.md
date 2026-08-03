@@ -383,6 +383,40 @@ Alennettu käyttäjän kohde menettää myös tarkkuutensa (`space` → `area`):
 kiistelty kohde ei saa luvata tarkkaa ruutua, vaikka se olisi aiemmin noussut
 siihen.
 
+### Poistolista
+
+`contributions/poistetut.json` on ylläpitäjän käsin kirjoittama lista kohteista,
+joita ei julkaista. Sitä tarvitaan, koska avoimen aineiston virhettä ei voi
+korjata tästä päästä: seuraava ajo hakee kohteen takaisin lähteestä.
+
+```json
+[
+  {
+    "uid": "tampere:1459",
+    "lat": 61.476855,
+    "lon": 23.761579,
+    "syy": "Piste 150 m päässä omasta osoitteestaan. Ilmoitettu Tampereelle.",
+    "lisatty": "2026-08-03"
+  }
+]
+```
+
+**Moderointiajo ei koskaan kirjoita tätä tiedostoa.** Koneen keräämä data on
+`tila.json`issa; tämä on ihmisen tekemä päätös. Samassa tiedostossa ne menisivät
+ennemmin tai myöhemmin päällekkäin.
+
+`syy` on käytännössä pakollinen: puolen vuoden päästä kukaan ei muista, miksi
+kohde on listalla, eikä sitä uskalla poistaa listalta silloinkaan kun lähde on
+korjattu.
+
+`lat` ja `lon` ovat turvaraja eivätkä koristeita. Deduplikoinnin ankkuri voi
+vaihtua ajojen välillä, jolloin sama uid osoittaa eri kohteeseen kuin poistoa
+kirjattaessa. Jos kohde on yli 50 m päässä kirjatusta sijainnista, poistoa **ei
+tehdä** ja ajo varoittaa. Hiljaa katoava invapaikka on pahin mahdollinen
+vikatyyppi tässä sovelluksessa.
+
+Poisto on viimeinen askel putkessa ja ohittaa kaiken automatiikan.
+
 ### Moderointi ei ole portti
 
 Yksittäinen ilmoitus julkaistaan heti vahvistamattomana, ja sovellus esittää
