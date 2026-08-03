@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Sijaintia käytetään oman paikkasi näyttämiseen kartalla, jotta löydät lähimmät invapysäköintipaikat.</string>
+	<string>Sijaintia käytetään oman paikkasi näyttämiseen kartalla, ja se lähetetään mukana, kun ilmoitat uuden invapaikan tai vahvistat olemassa olevan.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Esteri</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
