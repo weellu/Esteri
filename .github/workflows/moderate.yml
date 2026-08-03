@@ -88,8 +88,18 @@ jobs:
           fi
 
           branch="moderointi/$(date -u +%Y-%m-%d)"
+
+          # Haara haetaan ensin, jos se on jo olemassa. Ajuri kloonaa vain
+          # mainin (fetch-depth: 1), joten ilman tätä --force-with-lease ei
+          # tunne haaran etätilaa ja hylkää työnnön "stale info" -virheeseen.
+          # Vika näkyy vasta saman päivän toisella ajolla, koska ensimmäisellä
+          # kerralla haaraa ei ole vielä olemassa.
+          git fetch --depth=1 origin "$branch" 2>/dev/null || true
+
           git checkout -B "$branch"
           git commit -m "Käyttäjien lähetykset $(date -u +%Y-%m-%d)"
+          # Lease säilyy mielekkäänä: haaran sisältö tuotetaan joka ajolla
+          # uudelleen, mutta jos joku on työntänyt siihen käsin, työntö estyy.
           git push --force-with-lease -u origin "$branch"
 
           # Saman päivän uusintaajo päivittää olemassa olevan PR:n rungon
