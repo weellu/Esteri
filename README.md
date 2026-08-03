@@ -87,6 +87,7 @@ olemassaolostaan varma, ja käyttäjän ilmoittama päinvastoin.
 | *(tyhjä)* | Avoimesta aineistosta |
 | `reported` | Yhden käyttäjän ilmoitus, ei vahvistusta |
 | `confirmed` | Vähintään kolme laitetta vahvistanut maastossa |
+| `disputed` | Avoimessa aineistossa, mutta useampi käyttäjä ei löytänyt |
 
 Paikkamäärä tunnetaan 2 397 kohteelle, osoite vain 214:lle.
 
@@ -355,6 +356,32 @@ keskiluku — käyttäjä pettyy vähemmän löytäessään enemmän kuin luvatt
 Avoimen aineiston kohteessa maastohavainto voittaa rekisterin vasta **kahdella**
 havainnolla. Kunnan aineisto voi olla vanhentunut, mutta yksi ohikulkija voi
 olla yksinkertaisesti väärässä. Tyhjään kenttään yksikin havainto on parannus.
+
+### Kiiston purku
+
+Vahvistus ei saa olla yksisuuntainen. Ilman purkua väärin vahvistetusta
+tiedosta ei olisi paluutietä, ja kohde jolla on kymmenen kiistoa näyttäisi
+käyttäjälle täsmälleen samalta kuin ennenkin.
+
+| Tilanne | Seuraus |
+|---|---|
+| Kiistoja alle 2 | ei mitään |
+| Kiistoja ≤ vahvistuksia | ei mitään |
+| Kiistoja ≥ 2 ja enemmän kuin vahvistuksia | käyttäjän kohde alenee `reported`-tilaan, avoimen aineiston kohde merkitään `disputed` |
+| Kiistoja ≥ 3 ja yli kaksinkertaisesti vahvistuksiin | käyttäjän kohde poistetaan julkaisusta |
+
+Yksi kiisto ei riitä mihinkään: "ei löydy" voi tarkoittaa myös sitä, että
+etsijä katsoi väärästä kohdasta. Kahden eri laitteen erehtyminen samalla
+tavalla on jo harvinaisempaa.
+
+**Avoimen aineiston kohdetta ei poisteta.** Seuraava ajo hakisi sen takaisin
+lähteestä, ja kunnan rekisteri voi silti olla oikeassa. Merkintä on ainoa tapa
+kertoa käyttäjälle, että rekisteri ja maasto ovat eri mieltä — ratkaisu ei
+kuulu tähän ohjelmaan.
+
+Alennettu käyttäjän kohde menettää myös tarkkuutensa (`space` → `area`):
+kiistelty kohde ei saa luvata tarkkaa ruutua, vaikka se olisi aiemmin noussut
+siihen.
 
 ### Moderointi ei ole portti
 

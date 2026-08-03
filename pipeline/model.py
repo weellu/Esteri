@@ -29,8 +29,22 @@ _PRECISION_RANK = {PRECISION_SPACE: 3, PRECISION_SIGN: 2, PRECISION_AREA: 1}
 # turha kenttä maksaa enemmän kuin kertoo.
 VERIFICATION_REPORTED = "reported"    # yhden käyttäjän ilmoitus, ei vahvistusta
 VERIFICATION_CONFIRMED = "confirmed"  # useampi laite vahvistanut paikan päällä
+# Useampi käyttäjä ei löytänyt paikkaa. Käytetään avoimen aineiston kohteista,
+# joita ei voi poistaa: seuraava ajo hakisi ne joka tapauksessa takaisin
+# lähteestä. Merkintä on ainoa tapa kertoa käyttäjälle, että rekisteri ja
+# maasto ovat eri mieltä.
+#
+# Vanhat sovellusversiot tulkitsevat tuntemattoman arvon vahvistamattomaksi
+# (SpotVerification.parse), eli esittävät kiistellyn kohteen varovaisemmin
+# eivätkä väärin. Skeemaversiota ei siksi tarvitse nostaa.
+VERIFICATION_DISPUTED = "disputed"
 
-_VERIFICATIONS = (None, VERIFICATION_REPORTED, VERIFICATION_CONFIRMED)
+_VERIFICATIONS = (
+    None,
+    VERIFICATION_REPORTED,
+    VERIFICATION_CONFIRMED,
+    VERIFICATION_DISPUTED,
+)
 
 # Montako viimeisintä ruutumäärää otetaan mediaaniin. Kaikkien aikojen mediaani
 # jumittaisi vanhaan lukemaan: jos ruutuja maalataan yksi pois, kymmenen vanhaa

@@ -8,6 +8,7 @@ ParkingSpot spotWith(
   String? name,
   SpotVerification verification = SpotVerification.curated,
   int confirmations = 0,
+  int disputes = 0,
 }) =>
     ParkingSpot(
       id: 1,
@@ -19,6 +20,7 @@ ParkingSpot spotWith(
       name: name,
       verification: verification,
       confirmations: confirmations,
+      disputes: disputes,
     );
 
 /// Markerin oman kehyksen koristelu. Vahvistamattomalla kohteella on lisäksi
@@ -97,6 +99,17 @@ void main() {
         confirmations: 4,
       );
       expect(SpotVisuals.explainSpot(spot), contains('4'));
+    });
+
+    test('kiistetyn selite kertoo montako ei löytänyt', () {
+      final spot = spotWith(
+        SpotPrecision.space,
+        verification: SpotVerification.disputed,
+        disputes: 4,
+      );
+      final text = SpotVisuals.explainSpot(spot);
+      expect(text, contains('4'));
+      expect(text, contains('ei löytänyt'));
     });
 
     test('lyhyt selite erottaa kaikki kolme alkuperää', () {
@@ -179,6 +192,29 @@ void main() {
       );
 
       expect(markerDecoration(tester).color, Colors.white);
+    });
+
+    testWidgets('kiistetty erottuu vahvistamattomasta tunnuksellaan', (
+      tester,
+    ) async {
+      // Kysymysmerkki: emme tiedä onko paikkaa. Huutomerkki: joku kävi
+      // katsomassa eikä löytänyt. Käyttäjälle ne ovat eri tieto.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SpotMarkerIcon(
+              spot: spotWith(
+                SpotPrecision.space,
+                verification: SpotVerification.disputed,
+                disputes: 2,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('!'), findsOneWidget);
+      expect(find.text('?'), findsNothing);
     });
 
     testWidgets('vahvistettu ei saa vahvistamattoman tunnusta', (tester) async {

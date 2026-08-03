@@ -147,6 +147,23 @@ void main() {
       expect(SpotVerification.reported.isFromUsers, isTrue);
       expect(SpotVerification.confirmed.isFromUsers, isTrue);
     });
+
+    test('kiistetty tunnistetaan omaksi tilakseen', () {
+      expect(SpotVerification.parse('disputed'), SpotVerification.disputed);
+    });
+
+    test('kiistetty kohde ei ole käyttäjien ilmoittama', () {
+      // Kohde on avoimesta aineistosta; käyttäjien panos on epäily sitä
+      // kohtaan. Otsikko "Käyttäjän ilmoittama invapaikka" olisi väärä.
+      expect(SpotVerification.disputed.isFromUsers, isFalse);
+    });
+
+    test('epävarmoja ovat vahvistamaton ja kiistetty', () {
+      expect(SpotVerification.reported.isUncertain, isTrue);
+      expect(SpotVerification.disputed.isUncertain, isTrue);
+      expect(SpotVerification.curated.isUncertain, isFalse);
+      expect(SpotVerification.confirmed.isUncertain, isFalse);
+    });
   });
 
   group('lähdenimet', () {

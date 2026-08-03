@@ -19,7 +19,13 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .model import ParkingSpot, median_capacity
+from .model import (
+    PRECISION_AREA,
+    VERIFICATION_DISPUTED,
+    VERIFICATION_REPORTED,
+    ParkingSpot,
+    median_capacity,
+)
 
 log = logging.getLogger(__name__)
 
@@ -85,8 +91,14 @@ def apply_signals(spots: list[ParkingSpot], signals: dict[str, Any]) -> tuple[in
         # Nolla kirjoitetaan Nonena, jotta se ei päädy ulostuloon: "0
         # vahvistusta" ja "ei tietoa" ovat sama asia eikä kenttää kannata
         # viedä 2 787 kohteen tiedostoon turhaan.
-        spot.confirmations = present or None
-        spot.disputes = missing or None
+        # Lisätään, ei ylikirjoiteta. Käyttäjän kohteella on jo lukema
+        # lähteestä (montako erillistä ilmoitusta klusterin muodosti), ja
+        # ylikirjoitus pudotti sen napin painalluksella takaisin yhteen —
+        # vahvistaminen siis pienensi vahvistusten määrää. Luvut ovat
+        # erillisiä havaintoja eivätkä mene päällekkäin: "uusi paikka" kasvattaa
+        # klusteria, vahvistusnappi kirjaa signaalin.
+        spot.confirmations = ((spot.confirmations or 0) + present) or None
+        spot.disputes = ((spot.disputes or 0) + missing) or None
 
         # Maastohavainto voittaa rekisterin vasta kun havaintoja on kaksi.
         # Kunnan aineisto voi olla vanhentunut, mutta yksi ohikulkija voi olla
@@ -103,3 +115,61 @@ def apply_signals(spots: list[ParkingSpot], signals: dict[str, Any]) -> tuple[in
         log.info("%d signaalia ei osunut yhteenkään kohteeseen (säilytetään)", orphans)
     log.info("Käyttäjäsignaalit liitetty %d kohteeseen", matched_spots)
     return matched_spots, orphans
+
+
+# Montako kiistoa tarvitaan, ennen kuin kohteeseen kosketaan lainkaan. Yksi
+# ilmoitus "ei löydy" voi tarkoittaa myös sitä, että etsijä katsoi väärästä
+# kohdasta — kahden eri laitteen erehtyminen samalla tavalla on jo harvinaisempaa.
+DISPUTE_MIN = 2
+
+# Käyttäjän kohde poistetaan julkaisusta vasta, kun kiistoja on selvä enemmistö.
+# Kynnys on korkeampi kuin alentamisen, koska poisto on peruuttamaton siihen
+# asti kunnes joku ilmoittaa paikan uudelleen.
+DROP_MIN = 3
+DROP_FACTOR = 2
+
+
+def demote_disputed(spots: list[ParkingSpot]) -> tuple[list[ParkingSpot], int, int]:
+    """Pura kiistetyt kohteet.
+
+    Ilman tätä vahvistus oli yksisuuntainen: väärin vahvistetusta tiedosta ei
+    ollut paluutietä, ja kohde jolla oli kymmenen kiistoa näytti käyttäjälle
+    samalta kuin ennenkin.
+
+    Käyttäjän ilmoittama kohde voidaan poistaa kokonaan — sen ainoa todiste
+    olivat ilmoitukset, ja ne ovat nyt enemmistöltään kielteisiä. Avoimen
+    aineiston kohdetta ei poisteta, koska seuraava ajo hakisi sen takaisin
+    lähteestä ja koska kunnan rekisteri voi silti olla oikeassa. Se merkitään
+    kiistellyksi, jolloin sovellus voi kertoa erimielisyydestä.
+
+    Palauttaa (jäljelle jäävät kohteet, alennetut, poistetut).
+    """
+    kept: list[ParkingSpot] = []
+    demoted = 0
+    dropped = 0
+
+    for spot in spots:
+        disputes = spot.disputes or 0
+        confirmations = spot.confirmations or 0
+
+        if disputes < DISPUTE_MIN or disputes <= confirmations:
+            kept.append(spot)
+            continue
+
+        if spot.source == "users" and disputes >= DROP_MIN and disputes > DROP_FACTOR * confirmations:
+            dropped += 1
+            continue
+
+        if spot.source == "users":
+            # Tarkkuus seuraa vahvistusta: kiistelty kohde ei saa luvata
+            # tarkkaa ruutua, vaikka se olisi aiemmin noussut siihen.
+            spot.verification = VERIFICATION_REPORTED
+            spot.precision = PRECISION_AREA
+        else:
+            spot.verification = VERIFICATION_DISPUTED
+        demoted += 1
+        kept.append(spot)
+
+    if demoted or dropped:
+        log.info("Kiistettyjä: %d alennettu, %d poistettu julkaisusta", demoted, dropped)
+    return kept, demoted, dropped

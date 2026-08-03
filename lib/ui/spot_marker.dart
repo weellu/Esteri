@@ -22,7 +22,7 @@ class SpotVisuals {
     SpotPrecision precision, [
     SpotVerification verification = SpotVerification.curated,
   ]) {
-    if (verification == SpotVerification.reported) return unverified;
+    if (verification.isUncertain) return unverified;
     return switch (precision) {
       SpotPrecision.space => exact,
       SpotPrecision.sign => exact,
@@ -53,6 +53,9 @@ class SpotVisuals {
     SpotVerification.confirmed =>
       'Käyttäjien ilmoittama paikka, jonka ${spot.confirmations} eri '
           'käyttäjää on vahvistanut paikan päällä.',
+    SpotVerification.disputed =>
+      'Paikka on avoimessa aineistossa, mutta ${spot.disputes} käyttäjää ei '
+          'löytänyt sitä paikan päältä. Varaudu siihen, ettei sitä ole.',
   };
 
   static String shortLabel(SpotPrecision precision) => switch (precision) {
@@ -66,6 +69,7 @@ class SpotVisuals {
         SpotVerification.curated => shortLabel(spot.precision),
         SpotVerification.reported => 'Vahvistamaton ilmoitus',
         SpotVerification.confirmed => 'Käyttäjien vahvistama',
+        SpotVerification.disputed => 'Kiistetty',
       };
 }
 
@@ -77,11 +81,11 @@ class SpotMarkerIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = SpotVisuals.colorFor(spot.precision, spot.verification);
-    final isReported = spot.verification == SpotVerification.reported;
-    // Vahvistamaton kohde piirretään aina läpikuultavana riippumatta siitä,
-    // mitä sen precision sanoo — täytetty merkki lupaa varmuutta, jota ei ole.
-    final isHollow = isReported || spot.precision == SpotPrecision.area;
-    final isSign = spot.precision == SpotPrecision.sign && !isReported;
+    final isUncertain = spot.verification.isUncertain;
+    // Epävarma kohde piirretään aina läpikuultavana riippumatta siitä, mitä
+    // sen precision sanoo — täytetty merkki lupaa varmuutta, jota ei ole.
+    final isHollow = isUncertain || spot.precision == SpotPrecision.area;
+    final isSign = spot.precision == SpotPrecision.sign && !isUncertain;
 
     return Semantics(
       label: '${spot.title}. ${SpotVisuals.shortLabelForSpot(spot)}',
@@ -116,14 +120,23 @@ class SpotMarkerIcon extends StatelessWidget {
           // Vahvistamattomuus merkitään omalla tunnuksella eikä pelkällä
           // värillä. Sovelluksen käyttäjäkunta huomioiden pelkkä sävyero
           // olisi tässä huono valinta.
-          if (isReported)
+          if (isUncertain)
             Positioned(
               top: -3,
               right: -3,
               // Tunnus toistaa visuaalisesti sen, minkä Semantics-otsikko jo
               // kertoo. Ilman poissulkemista ruudunlukija lukisi perään
-              // irrallisen "?":n.
-              child: ExcludeSemantics(child: _UnverifiedBadge(color: color)),
+              // irrallisen merkin.
+              child: ExcludeSemantics(
+                child: _UncertainBadge(
+                  color: color,
+                  // Kysymysmerkki: emme tiedä onko paikkaa. Huutomerkki:
+                  // joku kävi katsomassa eikä löytänyt. Eri asia.
+                  mark: spot.verification == SpotVerification.disputed
+                      ? '!'
+                      : '?',
+                ),
+              ),
             ),
         ],
       ),
@@ -131,10 +144,11 @@ class SpotMarkerIcon extends StatelessWidget {
   }
 }
 
-class _UnverifiedBadge extends StatelessWidget {
-  const _UnverifiedBadge({required this.color});
+class _UncertainBadge extends StatelessWidget {
+  const _UncertainBadge({required this.color, required this.mark});
 
   final Color color;
+  final String mark;
 
   @override
   Widget build(BuildContext context) {
@@ -146,10 +160,10 @@ class _UnverifiedBadge extends StatelessWidget {
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 1.5),
       ),
-      child: const Center(
+      child: Center(
         child: Text(
-          '?',
-          style: TextStyle(
+          mark,
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 9,
             height: 1.1,

@@ -24,7 +24,7 @@ from typing import Optional
 from .dedupe import deduplicate, stats_by_source
 from .model import ParkingSpot
 from .outputs import write_geojson, write_manifest, write_sqlite
-from .signals import STATE_PATH, apply_signals, load_state
+from .signals import STATE_PATH, apply_signals, demote_disputed, load_state
 from .sources import SOURCES
 
 log = logging.getLogger("pipeline")
@@ -123,6 +123,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     # Vahvistukset liitetään vasta deduplikoinnin jälkeen: käyttäjä vahvisti
     # sen kohteen, jonka näki sovelluksessa, ja se kohde syntyy vasta tässä.
     apply_signals(spots, load_state(args.state)["signals"])
+
+    # Purku vasta liittämisen jälkeen: se tarvitsee sekä vahvistusten että
+    # kiistojen lopulliset luvut, ja käyttäjän kohteella osa vahvistuksista
+    # tulee lähteestä ja osa signaaleista.
+    spots, _, _ = demote_disputed(spots)
 
     spots.sort(key=lambda s: (s.lat, s.lon, s.uid))
 

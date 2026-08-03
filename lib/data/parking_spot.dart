@@ -36,7 +36,13 @@ enum SpotVerification {
   reported,
 
   /// Useampi käyttäjä on vahvistanut paikan päällä.
-  confirmed;
+  confirmed,
+
+  /// Useampi käyttäjä ei löytänyt paikkaa, vaikka se on avoimessa
+  /// aineistossa. Rekisteri ja maasto ovat eri mieltä, eikä sitä voi
+  /// ratkaista ruudulta — mutta käyttäjälle se on kerrottava ennen kuin hän
+  /// ajaa paikalle.
+  disputed;
 
   /// Tuntematon arvo tulkitaan varovaisesti vahvistamattomaksi. Uudempi
   /// aineisto voi tuntea tasoja, joita tämä sovellusversio ei — silloin on
@@ -44,10 +50,20 @@ enum SpotVerification {
   static SpotVerification parse(String? raw) => switch (raw) {
     null => SpotVerification.curated,
     'confirmed' => SpotVerification.confirmed,
+    'disputed' => SpotVerification.disputed,
     _ => SpotVerification.reported,
   };
 
-  bool get isFromUsers => this != SpotVerification.curated;
+  /// Onko kohteen olemassaolo käyttäjien varassa.
+  ///
+  /// Kiistetty kohde ei ole: se on avoimesta aineistosta, ja käyttäjien
+  /// panos on nimenomaan epäily sitä kohtaan.
+  bool get isFromUsers =>
+      this == SpotVerification.reported || this == SpotVerification.confirmed;
+
+  /// Onko kohteeseen syytä suhtautua varauksella.
+  bool get isUncertain =>
+      this == SpotVerification.reported || this == SpotVerification.disputed;
 }
 
 class ParkingSpot {

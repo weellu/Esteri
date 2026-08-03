@@ -3,11 +3,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pipeline.signals import apply_signals
+from pipeline.signals import apply_signals, demote_disputed
 from pipeline.model import (
     PRECISION_AREA,
     PRECISION_SPACE,
     VERIFICATION_CONFIRMED,
+    VERIFICATION_DISPUTED,
     VERIFICATION_REPORTED,
     ParkingSpot,
     median_capacity,
@@ -185,6 +186,72 @@ class SignalCapacityTest(unittest.TestCase):
         spot = self.spot(capacity=4)
         apply_signals([spot], {"tampere:1": {"present": 2, "capacities": [2, 2]}})
         self.assertEqual(spot.capacity, 2)
+
+
+class ConfirmationSummingTest(unittest.TestCase):
+    def test_vahvistusnappi_ei_pienenna_vahvistusten_maaraa(self):
+        # Aiemmin signaali ylikirjoitti lähteen lukeman: kolmen ilmoituksen
+        # kohde putosi yhteen, kun joku painoi "Paikka on".
+        spot = ParkingSpot(
+            source="users",
+            source_id="u00001",
+            lat=61.46,
+            lon=24.05,
+            precision=PRECISION_AREA,
+            verification=VERIFICATION_REPORTED,
+            confirmations=3,
+        )
+        apply_signals([spot], {"users:u00001": {"present": 1, "missing": 0}})
+        self.assertEqual(spot.confirmations, 4)
+
+
+class DemoteDisputedTest(unittest.TestCase):
+    """Kiiston purku: vahvistus ei saa olla yksisuuntainen."""
+
+    def spot(self, source, confirmations, disputes, verification=None):
+        return ParkingSpot(
+            source=source,
+            source_id="1",
+            lat=61.5,
+            lon=23.8,
+            precision=PRECISION_SPACE,
+            verification=verification,
+            confirmations=confirmations,
+            disputes=disputes,
+        )
+
+    def test_yksi_kiisto_ei_riita_mihinkaan(self):
+        # Yksi "ei löydy" voi tarkoittaa myös väärästä kohdasta etsimistä.
+        spot = self.spot("users", 1, 1, VERIFICATION_CONFIRMED)
+        kept, demoted, dropped = demote_disputed([spot])
+        self.assertEqual((len(kept), demoted, dropped), (1, 0, 0))
+        self.assertEqual(spot.verification, VERIFICATION_CONFIRMED)
+
+    def test_vahvistuksia_enemman_kuin_kiistoja_ei_pura(self):
+        spot = self.spot("users", 3, 2, VERIFICATION_CONFIRMED)
+        _, demoted, dropped = demote_disputed([spot])
+        self.assertEqual((demoted, dropped), (0, 0))
+
+    def test_kiistojen_enemmisto_alentaa_kayttajan_kohteen(self):
+        spot = self.spot("users", 1, 2, VERIFICATION_CONFIRMED)
+        kept, demoted, dropped = demote_disputed([spot])
+        self.assertEqual((len(kept), demoted, dropped), (1, 1, 0))
+        self.assertEqual(spot.verification, VERIFICATION_REPORTED)
+        # Tarkkuus seuraa vahvistusta: kiistelty ei saa luvata tarkkaa ruutua.
+        self.assertEqual(spot.precision, PRECISION_AREA)
+
+    def test_selva_enemmisto_poistaa_kayttajan_kohteen(self):
+        spot = self.spot("users", 1, 3, VERIFICATION_CONFIRMED)
+        kept, _, dropped = demote_disputed([spot])
+        self.assertEqual((kept, dropped), ([], 1))
+
+    def test_avoimen_aineiston_kohdetta_ei_poisteta_vaan_merkitaan(self):
+        # Seuraava ajo hakisi sen joka tapauksessa takaisin lähteestä, ja
+        # kunnan rekisteri voi silti olla oikeassa.
+        spot = self.spot("tampere", 0, 3)
+        kept, demoted, dropped = demote_disputed([spot])
+        self.assertEqual((len(kept), demoted, dropped), (1, 1, 0))
+        self.assertEqual(spot.verification, VERIFICATION_DISPUTED)
 
 
 if __name__ == "__main__":
