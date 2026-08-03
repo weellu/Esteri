@@ -162,6 +162,41 @@ void main() {
       expect(body.containsKey('capacity'), isFalse);
     });
 
+    testWidgets('"ruutu on tässä" lähettää tarkennuksen omalla sijainnilla', (
+      tester,
+    ) async {
+      final seen = <http.Request>[];
+      await pumpDetails(
+        tester,
+        spotAt(61.5, 23.8, uid: 'tampere:1459', precision: SpotPrecision.area),
+        contributions: await contributionService(seen),
+        location: FakeLocationService(first: here),
+      );
+
+      await tester.tap(find.text('Ruutu on tässä'));
+      await tester.pumpAndSettle();
+
+      final body = jsonDecode(seen.single.body) as Map<String, Object?>;
+      expect(body['kind'], 'relocate');
+      expect(body['target_uid'], 'tampere:1459');
+      // Sijainti on väite kohteen paikasta, ei vain todiste läsnäolosta.
+      expect(body['lat'], here.latitude);
+      expect(body['lon'], here.longitude);
+    });
+
+    testWidgets('alueen keskipisteestä kerrotaan erikseen', (tester) async {
+      // Aineiston yleisin epätarkkuus: yli puolet kohteista on keskipisteitä,
+      // jotka voivat olla satoja metrejä etsitystä ruudusta.
+      await pumpDetails(
+        tester,
+        spotAt(61.5, 23.8, uid: 'tampere:1', precision: SpotPrecision.area),
+        contributions: await contributionService([]),
+        location: FakeLocationService(first: here),
+      );
+
+      expect(find.textContaining('alueen keskipiste'), findsWidgets);
+    });
+
     testWidgets('evätty sijaintilupa kerrotaan eikä lähetetä mitään', (
       tester,
     ) async {

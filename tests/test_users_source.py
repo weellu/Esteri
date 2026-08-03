@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pipeline.signals import apply_signals, demote_disputed
+from pipeline.signals import apply_relocations, apply_signals, demote_disputed
 from pipeline.model import (
     PRECISION_AREA,
     PRECISION_SPACE,
@@ -252,6 +252,75 @@ class DemoteDisputedTest(unittest.TestCase):
         kept, demoted, dropped = demote_disputed([spot])
         self.assertEqual((len(kept), demoted, dropped), (1, 1, 0))
         self.assertEqual(spot.verification, VERIFICATION_DISPUTED)
+
+
+class ApplyRelocationsTest(unittest.TestCase):
+    """Tarkennus siirtää kohteen sinne, missä ruutu oikeasti on."""
+
+    LAT, LON = 61.5, 23.8
+    NEAR = [61.5010, 23.8010]
+    NEAR2 = [61.5012, 23.8012]
+
+    def spot(self, precision):
+        return ParkingSpot(
+            source="tampere",
+            source_id="1",
+            lat=self.LAT,
+            lon=self.LON,
+            precision=precision,
+        )
+
+    def test_yksi_tarkennus_siirtaa_alueen_keskipisteen(self):
+        # Keskipiste on jo valmiiksi arvaus, joten yksi maastomittaus on
+        # siitä parannus vaikka sekin heittäisi.
+        spot = self.spot(PRECISION_AREA)
+        moved, _ = apply_relocations(
+            [spot], {"tampere:1": {"relocations": [self.NEAR]}}
+        )
+        self.assertEqual(moved, 1)
+        self.assertAlmostEqual(spot.lat, self.NEAR[0])
+
+    def test_yksi_tarkennus_ei_siirra_tarkkaa_ruutua(self):
+        # Ruudun sijainti on kerran jo todettu; yhden ihmisen napautus ei
+        # saa kumota sitä.
+        spot = self.spot(PRECISION_SPACE)
+        moved, _ = apply_relocations(
+            [spot], {"tampere:1": {"relocations": [self.NEAR]}}
+        )
+        self.assertEqual(moved, 0)
+        self.assertAlmostEqual(spot.lat, self.LAT)
+
+    def test_kaksi_tarkennusta_siirtaa_tarkankin_ruudun(self):
+        spot = self.spot(PRECISION_SPACE)
+        moved, _ = apply_relocations(
+            [spot], {"tampere:1": {"relocations": [self.NEAR, self.NEAR2]}}
+        )
+        self.assertEqual(moved, 1)
+
+    def test_sijainti_on_havaintojen_keskiarvo(self):
+        spot = self.spot(PRECISION_AREA)
+        apply_relocations(
+            [spot], {"tampere:1": {"relocations": [self.NEAR, self.NEAR2]}}
+        )
+        self.assertAlmostEqual(spot.lat, (self.NEAR[0] + self.NEAR2[0]) / 2, places=6)
+
+    def test_kaksi_tarkennusta_nostaa_alueen_ruuduksi(self):
+        # Lähetyksen tarkkuusraja on 50 m, joten yksi mittaus ei riitä
+        # lupaamaan "tämä on itse ruutu". Kaksi riippumatonta on jo mittaus.
+        spot = self.spot(PRECISION_AREA)
+        _, sharpened = apply_relocations(
+            [spot], {"tampere:1": {"relocations": [self.NEAR, self.NEAR2]}}
+        )
+        self.assertEqual(sharpened, 1)
+        self.assertEqual(spot.precision, PRECISION_SPACE)
+
+    def test_yksi_tarkennus_ei_nosta_tarkkuutta(self):
+        spot = self.spot(PRECISION_AREA)
+        _, sharpened = apply_relocations(
+            [spot], {"tampere:1": {"relocations": [self.NEAR]}}
+        )
+        self.assertEqual(sharpened, 0)
+        self.assertEqual(spot.precision, PRECISION_AREA)
 
 
 if __name__ == "__main__":

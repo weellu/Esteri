@@ -53,6 +53,15 @@ CLUSTER_RADIUS_M = 15.0
 # muuten vahvistus ei kerro mitään maastosta.
 CONFIRM_MAX_DISTANCE_M = 100.0
 
+# Tarkennuksella on oma, väljempi raja. Vahvistuksen sadan metrin raja on
+# väärä tähän: tarkennuksen koko sisältö on se, että kartan piste on kaukana
+# oikeasta paikasta. Sadan metrin rajalla juuri pahimpia virheitä ei voisi
+# korjata lainkaan — ja jos piste on metsässä tai vedessä, sen luo ei pääse.
+#
+# Viisisataa metriä riittää alueen keskipisteestä ruutuun ja tavallisiin
+# aineistovirheisiin, mutta hylkää selvät väärinnapautukset.
+RELOCATE_MAX_DISTANCE_M = 500.0
+
 # Paikannustarkkuus, jota huonommalla lähetystä ei oteta vastaan. Sisätiloissa
 # tai kaupunkikuilussa GPS voi heittää satoja metrejä, jolloin lähetys
 # kohdistuu käytännössä satunnaiseen paikkaan.
@@ -61,6 +70,7 @@ MAX_GPS_ACCURACY_M = 50.0
 KIND_NEW = "new"
 KIND_PRESENT = "present"
 KIND_MISSING = "missing"
+KIND_RELOCATE = "relocate"
 
 
 class ModerationResult:
@@ -70,12 +80,13 @@ class ModerationResult:
         self.promoted: list[dict[str, Any]] = []
         self.confirmations = 0
         self.disputes = 0
+        self.relocations = 0
         self.rejected: list[tuple[int, str, Optional[str]]] = []
 
     @property
     def needs_pr(self) -> bool:
         return bool(self.new_spots or self.grown or self.promoted) or bool(
-            self.confirmations or self.disputes
+            self.confirmations or self.disputes or self.relocations
         )
 
 
@@ -152,7 +163,7 @@ def _next_id(features: list[dict[str, Any]]) -> str:
 def _validate(submission: dict[str, Any]) -> Optional[str]:
     """Palauta hylkäyksen syy, tai None jos lähetys kelpaa."""
     kind = submission.get("kind")
-    if kind not in (KIND_NEW, KIND_PRESENT, KIND_MISSING):
+    if kind not in (KIND_NEW, KIND_PRESENT, KIND_MISSING, KIND_RELOCATE):
         return f"tuntematon laji {kind!r}"
     try:
         lat = float(submission["lat"])
@@ -164,7 +175,9 @@ def _validate(submission: dict[str, Any]) -> Optional[str]:
     accuracy = submission.get("accuracy_m")
     if accuracy is not None and float(accuracy) > MAX_GPS_ACCURACY_M:
         return f"paikannustarkkuus {float(accuracy):.0f} m"
-    if kind in (KIND_PRESENT, KIND_MISSING) and not submission.get("target_uid"):
+    if kind in (KIND_PRESENT, KIND_MISSING, KIND_RELOCATE) and not submission.get(
+        "target_uid"
+    ):
         return "vahvistuksesta puuttuu kohde"
     return None
 
@@ -205,6 +218,27 @@ def moderate(
         kind = submission["kind"]
         capacity = submission.get("capacity")
         capacity = int(capacity) if isinstance(capacity, int) and capacity > 0 else None
+
+        if kind == KIND_RELOCATE:
+            uid = str(submission["target_uid"])
+            known = dataset_index.get(uid)
+            if known is None:
+                result.rejected.append(
+                    (submission_id, "tarkennuksen kohdetta ei ole aineistossa", uid)
+                )
+                continue
+            distance = haversine_m(lat, lon, known[0], known[1])
+            if distance > RELOCATE_MAX_DISTANCE_M:
+                result.rejected.append(
+                    (submission_id, f"tarkennus {distance:.0f} m päästä kohteesta", uid)
+                )
+                continue
+            _bump_signal(state, uid, "present", when, capacity=capacity)
+            state["signals"][uid].setdefault("relocations", []).append(
+                [round(lat, 7), round(lon, 7)]
+            )
+            result.relocations += 1
+            continue
 
         if kind in (KIND_PRESENT, KIND_MISSING):
             uid = str(submission["target_uid"])
@@ -362,6 +396,7 @@ def build_report(result: ModerationResult) -> str:
     parts.append("## Käyttäjien lähetykset\n")
     parts.append(
         f"Vahvistuksia {result.confirmations}, kiistoja {result.disputes}, "
+        f"tarkennuksia {result.relocations}, "
         f"uusia kohteita {len(result.new_spots)}.\n"
     )
 

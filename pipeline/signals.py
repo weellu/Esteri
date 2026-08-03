@@ -21,6 +21,7 @@ from typing import Any
 
 from .model import (
     PRECISION_AREA,
+    PRECISION_SPACE,
     VERIFICATION_DISPUTED,
     VERIFICATION_REPORTED,
     ParkingSpot,
@@ -173,3 +174,74 @@ def demote_disputed(spots: list[ParkingSpot]) -> tuple[list[ParkingSpot], int, i
     if demoted or dropped:
         log.info("Kiistettyjä: %d alennettu, %d poistettu julkaisusta", demoted, dropped)
     return kept, demoted, dropped
+
+
+# Montako tarkennusta vaaditaan, ennen kuin kohdetta siirretään.
+#
+# Alueen keskipiste on jo valmiiksi arvaus: yksi maastossa tehty mittaus on
+# siitä parannus, vaikka sekin heittäisi. Tarkaksi merkityn ruudun siirtoon
+# vaaditaan kaksi — sen sijainti on kerran jo todettu, eikä yhden ihmisen
+# napautus saa kumota sitä.
+RELOCATE_MIN_AREA = 1
+RELOCATE_MIN_SPACE = 2
+
+# Montako tarkennusta vaaditaan tarkkuuden nostoon alueesta ruuduksi.
+#
+# Lähetyksen tarkkuusraja on 50 metriä, joten yksittäinen mittaus voi olla
+# puolen korttelin verran pielessä. Se riittää siirtämään keskipisteen
+# lähemmäs muttei lupaamaan "tämä on itse ruutu". Kahden riippumattoman
+# mittauksen keskiarvo on jo mittaus eikä arvaus — sama perustelu kuin
+# users.py:n vahvistuskynnyksellä.
+PRECISION_MIN_RELOCATIONS = 2
+
+
+def apply_relocations(spots: list[ParkingSpot], signals: dict[str, Any]) -> tuple[int, int]:
+    """Siirrä kohteet käyttäjien tarkennusten mukaan.
+
+    Tarkennus on eri asia kuin vahvistus: käyttäjä ei kerro olevansa kohteen
+    luona vaan sen, että kohde on siellä missä hän on. Yleisin tapaus on
+    pysäköintialueen keskipiste, joka voi olla satoja metrejä siitä ruudusta,
+    jota autoilija etsii.
+
+    Palauttaa (siirretyt, tarkennetut).
+    """
+    if not signals:
+        return 0, 0
+
+    moved = 0
+    sharpened = 0
+
+    for spot in spots:
+        points: list[list[float]] = []
+        seen: list[str] = []
+        for uid in (spot.uid, *spot.merged_from):
+            signal = signals.get(uid)
+            if signal is None or uid in seen:
+                continue
+            seen.append(uid)
+            points.extend(signal.get("relocations") or [])
+
+        usable = [
+            (float(p[0]), float(p[1]))
+            for p in points
+            if isinstance(p, (list, tuple)) and len(p) >= 2
+        ]
+        needed = (
+            RELOCATE_MIN_AREA if spot.precision == PRECISION_AREA else RELOCATE_MIN_SPACE
+        )
+        if len(usable) < needed:
+            continue
+
+        # Keskiarvo, ei viimeisin: yksittäisen mittauksen virhe on satunnainen
+        # ja kumoutuu useammalla havainnolla.
+        spot.lat = round(sum(p[0] for p in usable) / len(usable), 7)
+        spot.lon = round(sum(p[1] for p in usable) / len(usable), 7)
+        moved += 1
+
+        if spot.precision == PRECISION_AREA and len(usable) >= PRECISION_MIN_RELOCATIONS:
+            spot.precision = PRECISION_SPACE
+            sharpened += 1
+
+    if moved:
+        log.info("Tarkennukset: %d kohdetta siirretty, %d nostettu ruuduksi", moved, sharpened)
+    return moved, sharpened

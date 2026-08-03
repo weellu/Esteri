@@ -336,6 +336,36 @@ muuttaa ilman uutta deployta.
 | Kolmas eri laite samasta kohdasta | Nousee vahvistetuksi | ei |
 | Muu uusi paikka | Julkaistaan `reported`-tilassa | katselmointi |
 
+### Tarkennus: ruutu on muualla kuin piste
+
+Yli puolet aineistosta on alueen keskipisteitä, ja keskipiste voi olla satoja
+metrejä siitä ruudusta, jota autoilija etsii. **"Ruutu on tässä"** siirtää
+kohteen sinne, missä ilmoittaja on.
+
+Sama toiminto korjaa myös väärin sijoitetut pisteet. Se on tarpeen, koska
+vahvistuksen sadan metrin raja tekee niistä muuten korjauskelvottomia:
+ilmoituksen koko sisältö on, että piste on kaukana oikeasta paikasta — ja jos
+piste on metsässä tai vedessä, sen luo ei pääse. Tarkennuksella on siksi oma,
+väljempi raja: **500 m**.
+
+| Kohteen tarkkuus | Tarkennuksia siirtoon | Tarkkuus nousee ruuduksi |
+|---|---:|---:|
+| `area` (keskipiste) | 1 | 2 |
+| `space` (tarkka ruutu) | 2 | — |
+
+Alueen keskipiste on jo valmiiksi arvaus, joten yksi maastomittaus on siitä
+parannus vaikka sekin heittäisi. Tarkaksi merkityn ruudun siirtoon vaaditaan
+kaksi: sen sijainti on kerran jo todettu, eikä yhden ihmisen napautus saa
+kumota sitä.
+
+Tarkkuuden nostoon vaaditaan kaksi havaintoa, koska lähetyksen tarkkuusraja on
+50 m — yksittäinen mittaus voi olla puolen korttelin verran pielessä. Se riittää
+siirtämään keskipisteen lähemmäs muttei lupaamaan "tämä on itse ruutu". Kahden
+riippumattoman mittauksen keskiarvo on jo mittaus eikä arvaus.
+
+Tarkennus kirjataan samalla vahvistukseksi: ilmoittaja on paikan päällä, joten
+kohde on olemassa.
+
 ### Ruutujen määrä
 
 Ilmoitukseen voi liittää invaruutujen määrän. Se on vapaaehtoinen: arvaus

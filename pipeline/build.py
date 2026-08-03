@@ -25,7 +25,13 @@ from .dedupe import deduplicate, stats_by_source
 from .model import ParkingSpot
 from .outputs import write_geojson, write_manifest, write_sqlite
 from .corrections import CORRECTIONS_PATH, apply_corrections, load_corrections
-from .signals import STATE_PATH, apply_signals, demote_disputed, load_state
+from .signals import (
+    STATE_PATH,
+    apply_relocations,
+    apply_signals,
+    demote_disputed,
+    load_state,
+)
 from .sources import SOURCES
 
 log = logging.getLogger("pipeline")
@@ -129,7 +135,12 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     # Vahvistukset liitetään vasta deduplikoinnin jälkeen: käyttäjä vahvisti
     # sen kohteen, jonka näki sovelluksessa, ja se kohde syntyy vasta tässä.
-    apply_signals(spots, load_state(args.state)["signals"])
+    signals = load_state(args.state)["signals"]
+    apply_signals(spots, signals)
+
+    # Tarkennukset ennen purkua: kiiston kynnys lasketaan siitä kohteesta,
+    # joka käyttäjälle näytetään, eikä siitä missä se oli ennen siirtoa.
+    apply_relocations(spots, signals)
 
     # Purku vasta liittämisen jälkeen: se tarvitsee sekä vahvistusten että
     # kiistojen lopulliset luvut, ja käyttäjän kohteella osa vahvistuksista

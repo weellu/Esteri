@@ -16,7 +16,14 @@ enum SubmissionKind {
   present('present'),
 
   /// Aineistossa olevaa paikkaa ei löydy.
-  missing('missing');
+  missing('missing'),
+
+  /// Paikka on olemassa, mutta ruutu on muualla kuin kartan piste.
+  ///
+  /// Yleisin tapaus on pysäköintialueen keskipiste, joka voi olla satoja
+  /// metrejä siitä ruudusta, jota autoilija etsii. Lähettäjän sijainti on
+  /// tällöin väite kohteen sijainnista eikä vain todiste läsnäolosta.
+  relocate('relocate');
 
   const SubmissionKind(this.wire);
 

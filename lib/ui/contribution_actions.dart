@@ -99,7 +99,7 @@ class _ContributionActionsState extends State<ContributionActions> {
   int? _capacity;
   late bool _done = widget.contributions.hasActedOn(widget.spot.uid);
 
-  Future<void> _send(bool present) async {
+  Future<void> _send(SubmissionKind kind) async {
     setState(() => _busy = true);
     try {
       final fix = await resolveFix(context, widget.location);
@@ -107,14 +107,14 @@ class _ContributionActionsState extends State<ContributionActions> {
 
       final outcome = await widget.contributions.submit(
         Submission(
-          kind: present ? SubmissionKind.present : SubmissionKind.missing,
+          kind: kind,
           lat: fix.position.latitude,
           lon: fix.position.longitude,
           accuracyM: fix.accuracyM,
           targetUid: widget.spot.uid,
-          // Määrä kuuluu vain vahvistukseen. Kiisto sanoo ettei paikkaa ole,
-          // eikä olemattomalla paikalla ole ruutuja.
-          capacity: present ? _capacity : null,
+          // Määrä ei kuulu kiistoon: olemattomalla paikalla ei ole ruutuja,
+          // ja palvelin hylkää yhdistelmän.
+          capacity: kind == SubmissionKind.missing ? null : _capacity,
         ),
       );
       if (!mounted) return;
@@ -178,7 +178,7 @@ class _ContributionActionsState extends State<ContributionActions> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _send(true),
+                  onPressed: _busy ? null : () => _send(SubmissionKind.present),
                   icon: const Icon(Icons.check),
                   label: const Text('Paikka on'),
                   style: OutlinedButton.styleFrom(
@@ -189,7 +189,7 @@ class _ContributionActionsState extends State<ContributionActions> {
               const SizedBox(width: 10),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _send(false),
+                  onPressed: _busy ? null : () => _send(SubmissionKind.missing),
                   icon: const Icon(Icons.close),
                   label: const Text('Ei löydy'),
                   style: OutlinedButton.styleFrom(
@@ -198,6 +198,29 @@ class _ContributionActionsState extends State<ContributionActions> {
                 ),
               ),
             ],
+          ),
+
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : () => _send(SubmissionKind.relocate),
+            icon: const Icon(Icons.my_location),
+            label: const Text('Ruutu on tässä'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            // Alueen keskipiste voi olla satoja metrejä siitä ruudusta, jota
+            // autoilija etsii. Se on aineiston yleisin epätarkkuus, joten se
+            // sanotaan ääneen juuri niissä kohteissa.
+            widget.spot.precision == SpotPrecision.area
+                ? 'Kartalla tämä on alueen keskipiste. Jos olet ruudussa, '
+                      'siirrä piste sen kohdalle.'
+                : 'Käytä tätä, jos ruutu on muualla kuin kartan piste.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),

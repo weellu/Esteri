@@ -375,3 +375,74 @@ class RejectionReportTest(unittest.TestCase):
         report = build_report(result)
         self.assertIn("tampere:1234", report)
         self.assertIn("#1", report)
+
+
+class RelocateTest(unittest.TestCase):
+    """Tarkennus: kartan piste on väärässä paikassa."""
+
+    def test_tarkennus_kirjataan_signaaliin(self):
+        state = empty_state()
+        result = moderate(
+            [
+                submission(
+                    1,
+                    "relocate",
+                    target="tampere:1459",
+                    lat=LAT + 200 * METER,
+                )
+            ],
+            dataset=[("tampere:1459", LAT, LON)],
+            contributions=empty_contributions(),
+            state=state,
+        )
+        self.assertEqual(result.relocations, 1)
+        points = state["signals"]["tampere:1459"]["relocations"]
+        self.assertEqual(len(points), 1)
+        self.assertAlmostEqual(points[0][0], LAT + 200 * METER, places=5)
+
+    def test_tarkennus_kelpaa_kauempaa_kuin_vahvistus(self):
+        # Sadan metrin raja on väärä tähän: tarkennuksen koko sisältö on se,
+        # että kartan piste on kaukana oikeasta paikasta.
+        state = empty_state()
+        result = moderate(
+            [submission(1, "relocate", target="x", lat=LAT + 300 * METER)],
+            dataset=[("x", LAT, LON)],
+            contributions=empty_contributions(),
+            state=state,
+        )
+        self.assertEqual(result.relocations, 1)
+        self.assertEqual(result.rejected, [])
+
+    def test_liian_kaukainen_tarkennus_hylataan(self):
+        result = moderate(
+            [submission(1, "relocate", target="x", lat=LAT + 800 * METER)],
+            dataset=[("x", LAT, LON)],
+            contributions=empty_contributions(),
+            state=empty_state(),
+        )
+        self.assertEqual(result.relocations, 0)
+        self.assertEqual(len(result.rejected), 1)
+        self.assertIn("tarkennus", result.rejected[0][1])
+
+    def test_tuntematon_kohde_hylataan(self):
+        # Vahvistus hyväksytään tuntemattomalle uid:lle, tarkennus ei:
+        # ilman kohteen sijaintia etäisyyttä ei voi tarkistaa lainkaan.
+        result = moderate(
+            [submission(1, "relocate", target="ei-ole")],
+            dataset=[],
+            contributions=empty_contributions(),
+            state=empty_state(),
+        )
+        self.assertEqual(len(result.rejected), 1)
+
+    def test_tarkennus_on_myos_vahvistus(self):
+        # Käyttäjä on paikan päällä, joten kohde on olemassa.
+        state = empty_state()
+        moderate(
+            [submission(1, "relocate", target="x", capacity=2)],
+            dataset=[("x", LAT, LON)],
+            contributions=empty_contributions(),
+            state=state,
+        )
+        self.assertEqual(state["signals"]["x"]["present"], 1)
+        self.assertEqual(state["signals"]["x"]["capacities"], [2])

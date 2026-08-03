@@ -18,7 +18,10 @@
 
 const FINLAND = { minLat: 59.0, maxLat: 70.5, minLon: 19.0, maxLon: 32.0 };
 
-const KINDS = new Set(['new', 'present', 'missing']);
+// 'relocate' = "ruutu on tässä, ei siellä missä kartan piste on". Sama
+// lähetys kuin vahvistus, mutta lähettäjän sijainti on väite kohteen
+// sijainnista eikä vain todiste läsnäolosta.
+const KINDS = new Set(['new', 'present', 'missing', 'relocate']);
 
 // Saman laitteen lähetykset tätä lähempänä toisiaan ovat sama ilmoitus.
 // Toisto voi tulla myös sovelluksen offline-jonosta uudelleenyrityksenä,
