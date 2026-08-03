@@ -8,9 +8,14 @@ import 'contribution_actions.dart';
 /// Uuden invapaikan ilmoittaminen.
 ///
 /// Sijainti otetaan laitteen paikannuksesta eikä kartalta raahaamalla:
-/// ilmoituksen arvo on siinä, että joku on oikeasti seissyt paikan päällä.
-/// Kartalta osoitettu piste näyttäisi samalta mutta ei kertoisi maastosta
-/// mitään, eikä sitä voisi erottaa arvauksesta jälkikäteen.
+/// ilmoituksen arvo on siinä, että joku on oikeasti ollut paikalla. Kartalta
+/// osoitettu piste näyttäisi samalta mutta ei kertoisi maastosta mitään, eikä
+/// sitä voisi erottaa arvauksesta jälkikäteen.
+///
+/// Ohjeteksti puhuu ruudussa olemisesta, ei siellä seisomisesta. Tämän
+/// sovelluksen käyttäjistä osa ei seiso, ja ilmoitus on tarkoituskin tehdä
+/// autosta käsin — silloin puhelin on ruudussa, mikä on juuri se mitä
+/// sijainnilta halutaan.
 ///
 /// Ilmoitus julkaistaan vahvistamattomana. Se kerrotaan tässä suoraan, jotta
 /// käyttäjä tietää mitä lähettää — ja miksi kolmen eri ihmisen ilmoitus on
@@ -92,8 +97,10 @@ class _AddSpotSheetState extends State<AddSpotSheet> {
         _fix = fix;
         _locating = false;
         _problem = accuracy != null && accuracy > Config.maxSubmitAccuracyM
-            ? 'Sijainti on epätarkka (±${accuracy.round()} m). Siirry '
-                  'taivasalle ja hae sijainti uudelleen.'
+            // Kerrotaan mistä tarkkuus paranee, ei käsketä liikkumaan:
+            // katoksen alla oleva ei välttämättä pääse sieltä pois helposti.
+            ? 'Sijainti on epätarkka (±${accuracy.round()} m). Tarkkuus '
+                  'paranee yleensä katoksen ja parkkihallin ulkopuolella.'
             : null;
       });
     } catch (error) {
@@ -136,86 +143,95 @@ class _AddSpotSheetState extends State<AddSpotSheet> {
     final canSend = fix != null && _problem == null && !_sending;
 
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Ilmoita invapaikka', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 12),
-            Text(
-              'Ilmoitus tehdään paikan päältä: sijainti otetaan laitteesi '
-              'paikannuksesta.',
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
+      // Sisältö vierii, koska sen korkeus ei ole ennustettava: sijainnin tila
+      // vaihtelee latauksesta virheeseen, saatteen kenttä kasvaa, ja
+      // näppäimistö vie puolet ruudusta. Ilman vieritystä lomake ylivuotaa
+      // pienellä näytöllä eikä lähetyspainikkeeseen yletä.
+      // Näppäimistön vaatiman tilan hoitaa jo [show], joten sitä ei lisätä
+      // tähän toiseen kertaan.
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Ilmoita invapaikka', style: theme.textTheme.titleLarge),
+              const SizedBox(height: 12),
+              Text(
+                'Tee ilmoitus ruudusta käsin — vaikka autosta. Sijainti otetaan '
+                'siitä, missä puhelin juuri nyt on, joten muualta lähetetty '
+                'ilmoitus merkitsee paikan väärään kohtaan.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
 
-            if (_locating)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    SizedBox(width: 12),
-                    Text('Haetaan sijaintia…'),
-                  ],
+              if (_locating)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 12),
+                      Text('Haetaan sijaintia…'),
+                    ],
+                  ),
+                )
+              else
+                _LocationStatus(fix: fix, problem: _problem, onRetry: _locate),
+
+              const SizedBox(height: 16),
+              TextField(
+                controller: _note,
+                maxLength: 80,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Missä tarkalleen? (valinnainen)',
+                  hintText: 'esim. P-talon 2. kerros, hissin vieressä',
+                  border: OutlineInputBorder(),
                 ),
-              )
-            else
-              _LocationStatus(fix: fix, problem: _problem, onRetry: _locate),
+              ),
+              Text(
+                'Saate näkyy vain ylläpidolle eikä päädy karttaan.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
 
-            const SizedBox(height: 16),
-            TextField(
-              controller: _note,
-              maxLength: 80,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Missä tarkalleen? (valinnainen)',
-                hintText: 'esim. P-talon 2. kerros, hissin vieressä',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: canSend ? _submit : null,
+                icon: _sending
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send),
+                label: const Text('Lähetä ilmoitus'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                ),
               ),
-            ),
-            Text(
-              'Saate näkyy vain ylläpidolle eikä päädy karttaan.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+              const SizedBox(height: 12),
+              Text(
+                'Ilmoitus näkyy kartalla vahvistamattomana, kunnes useampi '
+                'käyttäjä on käynyt vahvistamassa sen paikan päällä.\n\n'
+                // Lisenssiehto on kerrottava ennen lähetystä, ei sen jälkeen:
+                // avoimeen aineistoon luovutettua kohdetta ei saa enää pois,
+                // koska se on siihen mennessä levinnyt eteenpäin.
+                'Lähettämällä luovutat sijainnin avoimeen aineistoon '
+                '(ODbL 1.0). Nimeäsi tai laitettasi ei tallenneta.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
-            ),
-
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: canSend ? _submit : null,
-              icon: _sending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send),
-              label: const Text('Lähetä ilmoitus'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Ilmoitus näkyy kartalla vahvistamattomana, kunnes useampi '
-              'käyttäjä on käynyt vahvistamassa sen paikan päällä.\n\n'
-              // Lisenssiehto on kerrottava ennen lähetystä, ei sen jälkeen:
-              // avoimeen aineistoon luovutettua kohdetta ei saa enää pois,
-              // koska se on siihen mennessä levinnyt eteenpäin.
-              'Lähettämällä luovutat sijainnin avoimeen aineistoon '
-              '(ODbL 1.0). Nimeäsi tai laitettasi ei tallenneta.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

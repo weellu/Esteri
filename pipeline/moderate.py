@@ -41,7 +41,7 @@ log = logging.getLogger("moderate")
 
 # Ilmoitus näin lähellä olemassa olevaa kohdetta ei ole uusi paikka vaan
 # vahvistus. Sama kynnys kuin deduplikoinnin tarkka säde: jos aineistossa jo
-# on kohde tässä, käyttäjä seisoo sen päällä.
+# on kohde tässä, käyttäjä on sen kohdalla.
 EXISTING_RADIUS_M = 25.0
 
 # Kahden käyttäjäilmoituksen yhdistäminen samaksi paikaksi. Tiukempi kuin
@@ -215,7 +215,7 @@ def moderate(
         # Uusi paikka. Ensin: onko tämä oikeasti uusi?
         nearest_uid, distance = _nearest(lat, lon, dataset)
         if nearest_uid is not None and distance <= EXISTING_RADIUS_M:
-            # Käyttäjä seisoo jo tunnetun kohteen päällä. Arvokkaampaa kirjata
+            # Käyttäjä on jo tunnetun kohteen kohdalla. Arvokkaampaa kirjata
             # tämä vahvistuksena kuin luoda kilpaileva duplikaatti.
             _bump_signal(state, nearest_uid, "present", when)
             result.confirmations += 1

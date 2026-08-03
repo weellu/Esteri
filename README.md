@@ -299,7 +299,7 @@ huomiotta. Versio nostetaan vasta, jos olemassa olevan kentän merkitys muuttuu.
 
 Kaksi toimintoa: kohteen vahvistaminen tai kiistäminen maastossa, ja uuden
 invapaikan ilmoittaminen. Molemmat vaativat sijainnin — ilmoituksen koko arvo
-on siinä, että joku on oikeasti seissyt paikan päällä.
+on siinä, että joku on oikeasti ollut paikalla.
 
 ```
 sovellus ──POST──> Worker + D1 (backend/)

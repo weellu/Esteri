@@ -292,7 +292,7 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('Sijainnin seuranta epäonnistui: $error');
     if (!mounted) return;
     // Pysähtynyt seuranta näyttää käyttäjälle samalta kuin paikallaan
-    // seisominen, joten katkos on kerrottava.
+    // pysähdyksissä olo, joten katkos on kerrottava.
     messenger.showSnackBar(
       const SnackBar(content: Text('Sijainnin seuranta keskeytyi.')),
     );
