@@ -70,7 +70,7 @@ class ModerationResult:
         self.promoted: list[dict[str, Any]] = []
         self.confirmations = 0
         self.disputes = 0
-        self.rejected: list[tuple[int, str]] = []
+        self.rejected: list[tuple[int, str, Optional[str]]] = []
 
     @property
     def needs_pr(self) -> bool:
@@ -194,7 +194,9 @@ def moderate(
 
         problem = _validate(submission)
         if problem is not None:
-            result.rejected.append((submission_id, problem))
+            result.rejected.append(
+                (submission_id, problem, submission.get("target_uid"))
+            )
             continue
 
         lat = float(submission["lat"])
@@ -210,8 +212,15 @@ def moderate(
             if known is not None:
                 distance = haversine_m(lat, lon, known[0], known[1])
                 if distance > CONFIRM_MAX_DISTANCE_M:
+                    # Tunnus mukaan: hylkäys on usein juuri se hetki, jolloin
+                    # ihmisen pitäisi tehdä jotain — esimerkiksi todeta piste
+                    # väärin sijoitetuksi. Ilman tunnusta kohdetta ei löydä.
                     result.rejected.append(
-                        (submission_id, f"vahvistus {distance:.0f} m päästä kohteesta")
+                        (
+                            submission_id,
+                            f"vahvistus {distance:.0f} m päästä kohteesta",
+                            uid,
+                        )
                     )
                     continue
             # Tuntematon uid hyväksytään silti: kohde voi olla käyttäjän
@@ -378,7 +387,9 @@ def build_report(result: ModerationResult) -> str:
 
     if result.rejected:
         parts.append(f"\n### Hylättiin automaattisesti ({len(result.rejected)})\n")
-        parts.extend(f"- #{sid}: {reason}" for sid, reason in result.rejected)
+        for entry in result.rejected:
+            sid, reason, uid = entry if len(entry) == 3 else (*entry, None)
+            parts.append(f"- #{sid}: {reason}" + (f" — `{uid}`" if uid else ""))
 
     parts.append(
         "\n---\n_Saatetekstit näkyvät vain tässä kuvauksessa eivätkä päädy "

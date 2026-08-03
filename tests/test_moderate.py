@@ -352,3 +352,26 @@ class CapacityTest(unittest.TestCase):
             state=state,
         )
         self.assertEqual(state["signals"]["osm:node/9"]["capacities"], [4])
+
+
+class RejectionReportTest(unittest.TestCase):
+    def test_hylkays_nimeaa_kohteen(self):
+        # Hylkäys on usein se hetki, jolloin ihmisen pitäisi tehdä jotain:
+        # 500 metrin päästä tullut kiisto tarkoittaa yleensä, että piste on
+        # väärässä paikassa. Ilman tunnusta kohdetta ei löydä mistään.
+        result = moderate(
+            [
+                submission(
+                    1,
+                    "missing",
+                    target="tampere:1234",
+                    lat=LAT + 500 * METER,
+                )
+            ],
+            dataset=[("tampere:1234", LAT, LON)],
+            contributions=empty_contributions(),
+            state=empty_state(),
+        )
+        report = build_report(result)
+        self.assertIn("tampere:1234", report)
+        self.assertIn("#1", report)
