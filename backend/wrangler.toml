@@ -46,5 +46,37 @@ database_id = "256b0941-3e10-4fb9-949e-8022f1d1c4c0"
 # IP_SALT ei ole vaihdettavissa jälkikäteen menettämättä kuluvan vuorokauden
 # rate limit -laskureita. Se on hyväksyttävää: laskurit vanhenevat itsestään.
 
+# Väärinkäytön rajoitus MML-välitykselle.
+#
+# WAF:n rate limiting -säännöt ovat vyöhykekohtaisia, eikä workers.dev ole
+# meidän vyöhykkeemme — sääntöä ei siis voi kiinnittää mihinkään Cloudflaren
+# hallinnasta. Tämä binding toimii ilman omaa domainia.
+#
+# Rajat ovat väljät tarkoituksella. Kylmällä välimuistilla yksi kartan avaus
+# hakee kymmeniä tiiliä, ja vilkas selailu enemmän, joten liian tiukka raja
+# rikkoisi tavallisen käytön. Tarkoitus on pysäyttää kaapija, ei käyttäjä.
+#
+# Huom: laskurit ovat konesalikohtaisia ja eventually consistent. Todellinen
+# yhteenlaskettu raja on siis korkeampi kuin tässä lukee. Tämä on karkea
+# suojaus, ei kirjanpito.
+[[ratelimits]]
+name = "TILE_LIMIT"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 200
+  period = 10
+
+# Haku on murto-osa tiilien määrästä: sovellus lähettää kutsun vasta 350 ms:n
+# tauon jälkeen ja vain kahdesta merkistä alkaen, ja välimuistittaa tulokset.
+# Siksi tämä saa olla selvästi tiukempi.
+[[ratelimits]]
+name = "GEOCODE_LIMIT"
+namespace_id = "1002"
+
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
 [observability]
 enabled = true

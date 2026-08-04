@@ -90,6 +90,28 @@ const TILE_CACHE_SECONDS = 60 * 60 * 24 * 30;
 // leikkaamaan saman haun toistot ilman että uusi osoite jää piiloon pitkäksi.
 const GEOCODE_CACHE_SECONDS = 60 * 60 * 24;
 
+/**
+ * Konesalikohtainen rate limit MML-välitykselle.
+ *
+ * Avaimena on IP sellaisenaan eikä tiiviste, toisin kuin lähetysten rate
+ * limitissä. Ero on tarkoituksellinen: nuo laskurit elävät meidän D1:ssämme
+ * puoli vuotta, nämä Cloudflaren muistissa 10–60 sekuntia emmekä me pysty
+ * lukemaan niitä. SHA-256 jokaisesta tiilipyynnöstä maksaisi CPU-aikaa
+ * saamatta vastineeksi mitään — Cloudflare näkee IP:n joka tapauksessa.
+ *
+ * Puuttuva binding ei kaada mitään. Paikallinen ajo vanhalla konfiguraatiolla
+ * on kehitystilanne, ei syy jättää karttaa näyttämättä.
+ */
+async function withinLimit(limiter, request) {
+  if (!limiter) return true;
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'tuntematon';
+  const { success } = await limiter.limit({ key: ip });
+  return success;
+}
+
+const tooManyRequests = () =>
+  json({ error: 'liikaa pyyntöjä, yritä hetken kuluttua' }, 429);
+
 function missingKey() {
   // Tämä on palvelimen konfiguraatiovirhe, ei käyttäjän. 503 kertoo
   // sovellukselle että vika on täällä ja yrittäminen myöhemmin kannattaa.
@@ -101,6 +123,8 @@ async function handleTile(request, env, ctx, path) {
 
   const match = /^\/v1\/tiles\/(\d+)\/(\d+)\/(\d+)\.png$/.exec(path);
   if (!match) return json({ error: 'virheellinen tiilipolku' }, 400);
+
+  if (!(await withinLimit(env.TILE_LIMIT, request))) return tooManyRequests();
 
   const [z, y, x] = match.slice(1, 4).map(Number);
   // WMTS:n polkujärjestys on {TileMatrix}/{TileRow}/{TileCol} eli z/y/x —
@@ -150,6 +174,8 @@ async function handleGeocode(request, env, ctx) {
   const text = (params.get('text') ?? '').trim();
   if (text.length < 2) return json({ error: 'liian lyhyt hakusana' }, 400);
   if (text.length > 200) return json({ error: 'liian pitkä hakusana' }, 400);
+
+  if (!(await withinLimit(env.GEOCODE_LIMIT, request))) return tooManyRequests();
 
   const size = Math.min(
     Math.max(Number.parseInt(params.get('size') ?? '6', 10) || 6, 1),
