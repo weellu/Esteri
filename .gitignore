@@ -49,6 +49,13 @@ app.*.map.json
 # tunnisteen, ja syntyy siihen hakemistoon josta wrangler sattuu ajettavaksi.
 .wrangler/
 
+# Paikallisten ajojen salaisuudet. `wrangler dev` lukee tämän tiedoston, ja
+# siihen päätyisi MML_API_KEY selkokielisenä. Tuotannon arvot asetetaan
+# `wrangler secret put` -komennolla eivätkä ne ole missään tiedostossa —
+# tämä rivi on olemassa sen varalta, että joku kokeilee paikallisesti.
+.dev.vars
+.dev.vars.*
+
 # Datapipeline
 __pycache__/
 .cache/

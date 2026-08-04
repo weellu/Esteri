@@ -51,6 +51,149 @@ const json = (data, status = 200) =>
     headers: { 'content-type': 'application/json; charset=utf-8' },
   });
 
+/* --- Maanmittauslaitoksen välitys ---------------------------------------
+ *
+ * Sovellus ei saa MML:n API-avainta lainkaan. Se kutsuu näitä reittejä, ja
+ * avain lisätään vasta täällä. Syy on yksinkertainen: kaikki mikä lähetetään
+ * laitteelle on julkista. Käännökseen upotettu avain on kaivettavissa
+ * binäärista `strings`-komennolla, eikä sitä voi vaihtaa ilman kauppakierrosta.
+ *
+ * Nämä reitit ovat tarkoituksella kapeat. Ne eivät välitä mielivaltaista
+ * MML-pyyntöä vaan täsmälleen ne kaksi, joita sovellus käyttää: yhden
+ * taustakarttatiilen ja yhden osoitehaun. Kaikki muut parametrit kiinnitetään
+ * täällä, jottei proxysta tule yleistä MML-yhdyskäytävää jonka osoite sattuu
+ * olemaan binäärissa.
+ */
+
+const MML_TILES =
+  'https://avoin-karttakuva.maanmittauslaitos.fi/avoin/wmts/1.0.0' +
+  '/taustakartta/default/WGS84_Pseudo-Mercator';
+
+const MML_GEOCODE =
+  'https://avoin-paikkatieto.maanmittauslaitos.fi/geocoding/v2/pelias/search';
+
+// Sama yläraja kuin sovelluksen TileLayerin maxNativeZoom. Jos sitä nostetaan,
+// tämä on nostettava mukana — muuten kartta lakkaa tarkentumasta.
+const MAX_ZOOM = 18;
+
+// Haun tulosmäärä. Sovellus pyytää kuutta; katto on väljä muttei rajaton,
+// jottei yksi pyyntö voi tilata tuhatta osumaa.
+const MAX_GEOCODE_SIZE = 20;
+
+// Tiili on käytännössä muuttumaton: taustakartta päivittyy kuukausien
+// välein. Pitkä välimuistiaika pitää MML:n näkemän liikenteen pienenä, mikä
+// on olennaista sen ehdon kanssa, ettei rajapinta ole tarkoitettu
+// suurivolyymiseen käyttöön.
+const TILE_CACHE_SECONDS = 60 * 60 * 24 * 30;
+
+// Osoitehaku muuttuu useammin kuin kartta muttei nopeasti. Vuorokausi riittää
+// leikkaamaan saman haun toistot ilman että uusi osoite jää piiloon pitkäksi.
+const GEOCODE_CACHE_SECONDS = 60 * 60 * 24;
+
+function missingKey() {
+  // Tämä on palvelimen konfiguraatiovirhe, ei käyttäjän. 503 kertoo
+  // sovellukselle että vika on täällä ja yrittäminen myöhemmin kannattaa.
+  return json({ error: 'karttapalvelua ei ole määritetty' }, 503);
+}
+
+async function handleTile(request, env, ctx, path) {
+  if (!env.MML_API_KEY) return missingKey();
+
+  const match = /^\/v1\/tiles\/(\d+)\/(\d+)\/(\d+)\.png$/.exec(path);
+  if (!match) return json({ error: 'virheellinen tiilipolku' }, 400);
+
+  const [z, y, x] = match.slice(1, 4).map(Number);
+  // WMTS:n polkujärjestys on {TileMatrix}/{TileRow}/{TileCol} eli z/y/x —
+  // ei tavanomainen z/x/y. Väärä järjestys tuottaa kartan, joka näyttää
+  // latautuvan mutta esittää väärää aluetta.
+  const limit = 2 ** z;
+  if (z > MAX_ZOOM || x >= limit || y >= limit) {
+    return json({ error: 'tiili ruudukon ulkopuolella' }, 400);
+  }
+
+  const cache = caches.default;
+  const cacheKey = new Request(new URL(request.url).toString());
+  const hit = await cache.match(cacheKey);
+  if (hit) return hit;
+
+  let upstream;
+  try {
+    upstream = await fetch(
+      `${MML_TILES}/${z}/${y}/${x}.png?api-key=${env.MML_API_KEY}`,
+    );
+  } catch {
+    return json({ error: 'karttapalvelu ei vastannut' }, 502);
+  }
+  if (!upstream.ok) {
+    // Virhettä ei välimuistiteta: avaimen vaihto tai MML:n katkos korjaantuu
+    // itsestään, eikä sitä pidä jäädyttää kuukaudeksi.
+    return json({ error: 'karttapalvelu ei vastannut' }, 502);
+  }
+
+  // Runko luetaan kerralla muistiin sen sijaan että se striimattaisiin sekä
+  // vastaukseen että välimuistiin. Kloonatun striimin kaksi lukijaa etenevät
+  // eri tahtia, mikä kaataa ajoympäristön sisäiseen virheeseen. Tiili on
+  // kymmeniä kilotavuja, joten puskurointi ei maksa mitään.
+  const bytes = await upstream.arrayBuffer();
+  const headers = {
+    'content-type': upstream.headers.get('content-type') ?? 'image/png',
+    'cache-control': `public, max-age=${TILE_CACHE_SECONDS}`,
+  };
+  ctx.waitUntil(cache.put(cacheKey, new Response(bytes, { headers })));
+  return new Response(bytes, { headers });
+}
+
+async function handleGeocode(request, env, ctx) {
+  if (!env.MML_API_KEY) return missingKey();
+
+  const params = new URL(request.url).searchParams;
+  const text = (params.get('text') ?? '').trim();
+  if (text.length < 2) return json({ error: 'liian lyhyt hakusana' }, 400);
+  if (text.length > 200) return json({ error: 'liian pitkä hakusana' }, 400);
+
+  const size = Math.min(
+    Math.max(Number.parseInt(params.get('size') ?? '6', 10) || 6, 1),
+    MAX_GEOCODE_SIZE,
+  );
+
+  const cache = caches.default;
+  const cacheKey = new Request(
+    `https://esteri.invalid/geocode?text=${encodeURIComponent(text.toLowerCase())}&size=${size}`,
+  );
+  const hit = await cache.match(cacheKey);
+  if (hit) return hit;
+
+  // Lähteet kiinnitetään täällä eikä oteta asiakkaalta: kiinteistötunnukset
+  // ja karttalehdet eivät auta invapaikan etsijää, ja rajaus pitää proxyn
+  // kapeana.
+  const query = new URLSearchParams({
+    text,
+    size: String(size),
+    lang: 'fi',
+    sources: 'addresses,interpolated-road-addresses,geographic-names',
+    'api-key': env.MML_API_KEY,
+  });
+
+  let upstream;
+  try {
+    upstream = await fetch(`${MML_GEOCODE}?${query}`);
+  } catch {
+    return json({ error: 'hakupalvelu ei vastannut' }, 502);
+  }
+  if (!upstream.ok) {
+    return json({ error: 'hakupalvelu ei vastannut' }, 502);
+  }
+
+  // Sama puskurointi kuin tiilillä, samasta syystä.
+  const bytes = await upstream.arrayBuffer();
+  const headers = {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': `public, max-age=${GEOCODE_CACHE_SECONDS}`,
+  };
+  ctx.waitUntil(cache.put(cacheKey, new Response(bytes, { headers })));
+  return new Response(bytes, { headers });
+}
+
 function haversineM(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const toRad = (d) => (d * Math.PI) / 180;
@@ -276,11 +419,17 @@ async function handleQueue(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (request.method === 'POST' && url.pathname === '/v1/submissions') {
       return handleSubmission(request, env);
+    }
+    if (request.method === 'GET' && url.pathname.startsWith('/v1/tiles/')) {
+      return handleTile(request, env, ctx, url.pathname);
+    }
+    if (request.method === 'GET' && url.pathname === '/v1/geocode') {
+      return handleGeocode(request, env, ctx);
     }
     if (request.method === 'GET' && url.pathname === '/v1/queue') {
       return handleQueue(request, env);

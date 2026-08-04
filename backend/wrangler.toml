@@ -35,6 +35,13 @@ database_id = "256b0941-3e10-4fb9-949e-8022f1d1c4c0"
 # Salaisuudet asetetaan erikseen eikä tähän tiedostoon:
 #   wrangler secret put MODERATION_TOKEN   # moderointiajon lukuoikeus
 #   wrangler secret put IP_SALT            # rate limitin IP-tiivisteen suola
+#   wrangler secret put MML_API_KEY        # karttatiilet ja geokoodaus
+#
+# MML_API_KEY ei saa päätyä repoon eikä sovellukseen. Sovellus kutsuu
+# /v1/tiles ja /v1/geocode -reittejä, jotka lisäävät avaimen vasta täällä:
+# käännökseen upotettu avain olisi kaivettavissa binäärista eikä vaihdettavissa
+# ilman kauppakierrosta. Avaimen voi vaihtaa milloin tahansa ajamalla saman
+# komennon uudelleen ja deployaamalla.
 #
 # IP_SALT ei ole vaihdettavissa jälkikäteen menettämättä kuluvan vuorokauden
 # rate limit -laskureita. Se on hyväksyttävää: laskurit vanhenevat itsestään.
