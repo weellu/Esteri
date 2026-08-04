@@ -156,41 +156,52 @@ flutter run
 flutter test
 ```
 
-### API-avain
+### Karttatiilet ja API-avain
 
-Taustakartta tulee Maanmittauslaitokselta ja vaatii maksuttoman API-avaimen
-(OmaTili-rekisteröinti, ei laskutustiliä eikä luottokorttia). Avain annetaan
-sovelluksen sisällä avainkuvakkeesta — sitä ei tarvitse kääntää mukaan.
-Sovellus testaa avaimen hakemalla yhden tiilen ja kertoo heti, kelpaako se.
+Taustakartta ja osoitehaku tulevat Maanmittauslaitokselta, mutta sovellus ei
+kutsu MML:ää suoraan eikä käyttäjä syötä avainta. Molemmat kulkevat oman
+Workerin kautta (`/v1/tiles` ja `/v1/geocode`), joka lisää avaimen vasta
+palvelinpäässä.
 
-Kehityksessä avaimen voi antaa myös käännösaikana:
+Syy on se, ettei asiakaspäässä voi säilyttää salaisuuksia: käännökseen upotettu
+avain päätyy binääriin selkokielisenä ja on kaivettavissa `strings`-komennolla.
+Workerissa avain on lisäksi vaihdettavissa ilman kauppakierrosta.
+
+Avain asetetaan kerran taustapalveluun eikä se ole missään tiedostossa:
 
 ```bash
-flutter run --dart-define=MML_API_KEY=<avain>
+cd backend && wrangler secret put MML_API_KEY
 ```
 
-**Sovellus on käyttökelpoinen ilman avainta.** Invapaikat, kohteen tiedot ja
-navigointi toimivat; vain taustakartta jää tyhjäksi. Navigointi avaa puhelimen
-oman karttasovelluksen `url_launcher`illa eikä vaadi avainta millään alustalla.
+Sovellus tarvitsee siis vain taustapalvelun osoitteen. **Ilman sitä sovellus ei
+käynnisty** vaan näyttää virheen: taustakartta, haku ja ilmoitustoiminnot
+kulkevat kaikki saman Workerin kautta, joten puuttuva osoite ei ole osittainen
+puute vaan rikkinäinen paketti.
+
+Navigointi avaa puhelimen oman karttasovelluksen `url_launcher`illa eikä kulje
+taustapalvelun kautta lainkaan.
 
 ### Haku
 
 Hakupalkki yhdistää kaksi eri asiaa:
 
-1. **Osoitteet ja paikannimet** Maanmittauslaitoksen geokoodauspalvelusta
-   (`avoin-paikkatieto.maanmittauslaitos.fi/geocoding/v2/pelias/search`).
+1. **Osoitteet ja paikannimet** Maanmittauslaitoksen geokoodauspalvelusta,
+   oman Workerin `/v1/geocode`-reitin kautta.
    Tämä on ensisijainen tapa, koska käyttäjä tietää minne on menossa — ei
    minkä nimisen invapaikan luo. Valinta siirtää kartan sinne zoomilla 16.
 2. **Aineiston omat kohteet** nimen tai osoitteen perusteella. Täydentävä,
    koska osoite tunnetaan vain 214 kohteelle ja nimi harvemmalle.
 
-Geokoodaus käyttää samaa API-avainta kuin karttatiilet, joten erillistä
-rekisteröitymistä ei tarvita. Ilman avainta aineiston oma haku toimii silti —
-käyttäjä ei jää täysin ilman hakua.
+Geokoodaus kulkee saman Workerin kautta kuin tiilet. Jos taustapalvelu on
+nurin, aineiston oma haku toimii silti — käyttäjä ei jää täysin ilman hakua.
+
+Hakusana lähetetään vasta kahdesta merkistä alkaen, ja onnistuneet haut jäävät
+muistiin. Raja on kaksi eikä kolme, koska Ii on kunta.
 
 Haetaan vain lähteitä `addresses`, `interpolated-road-addresses` ja
 `geographic-names`. Kiinteistötunnukset ja karttalehdet on jätetty pois: ne
-eivät auta pysäköintipaikan etsijää.
+eivät auta pysäköintipaikan etsijää. Rajaus tehdään Workerissa, jottei
+proxysta tule yleistä MML-yhdyskäytävää.
 
 Koordinaattien akselijärjestys päätellään arvoalueista samalla logiikalla kuin
 Turun aineistossa. Suomen leveys- ja pituusasteet eivät mene päällekkäin, joten

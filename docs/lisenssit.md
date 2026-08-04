@@ -77,9 +77,14 @@ eteenpäin kaikkiin sitä käyttäviin palveluihin, eikä sitä saisi enää poi
 - **Aineistotiedostossa**: `license`- ja `attribution`-kentät sekä GeoJSONin
   `metadata`-lohkossa että SQLiten `meta`-taulussa, jotta tieto ei katoa jos
   tiedosto irtoaa reposta.
-- **Maanmittauslaitoksen krediitti näytetään vain kun taustakarttaa oikeasti
-  näytetään** — ilman API-avainta tiiliä ei haeta, jolloin krediitti olisi
-  harhaanjohtava.
+- **Maanmittauslaitoksen krediitti on aina näkyvissä**, koska taustakartta on
+  aina käytössä. Aiemmin se oli ehdollinen: ilman käyttäjän API-avainta tiiliä
+  ei haettu, jolloin krediitti olisi ollut harhaanjohtava. Avain on nyt
+  taustapalvelussa eikä käyttäjällä, joten ehtoa ei enää ole.
+
+  Huom: tiilet kulkevat oman Workerin kautta, mutta kartta on silti
+  Maanmittauslaitoksen. Välityspalvelin ei muuta sitä, kenen aineistoa
+  näytetään, eikä siis vähennä attribuutiovelvoitetta.
 
 ## Jos lähteitä lisätään
 

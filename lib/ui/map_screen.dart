@@ -15,7 +15,6 @@ import '../services/contribution_service.dart';
 import '../services/data_updater.dart';
 import '../services/geocoder.dart';
 import '../services/location_service.dart';
-import '../services/map_key_store.dart';
 import '../services/tile_cache.dart';
 import 'settings_screen.dart';
 import 'add_spot_sheet.dart';
@@ -35,7 +34,6 @@ class MapScreen extends StatefulWidget {
   const MapScreen({
     super.key,
     required this.database,
-    required this.keyStore,
     this.geocoder,
     this.locationService,
     this.dataSource,
@@ -45,7 +43,6 @@ class MapScreen extends StatefulWidget {
   });
 
   final SpotRepository database;
-  final MapKeyStore keyStore;
 
   /// Karttatiilien levyvälimuisti. Null, kun sitä ei saatu auki tai kun
   /// testi ei tarvitse sitä — kartta hakee tiilet silloin suoraan verkosta.
@@ -327,11 +324,10 @@ class _MapScreenState extends State<MapScreen> {
     // ilmestyneeksi heti — käyttäjä luulisi kohteen olevan jo muiden nähtävissä.
   }
 
-  Future<void> _openKeyScreen() async {
+  Future<void> _openSettings() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => SettingsScreen(
-          store: widget.keyStore,
           dataSource: widget.dataSource,
           updater: widget.updater,
         ),
@@ -361,7 +357,7 @@ class _MapScreenState extends State<MapScreen> {
         actions: [
           IconButton(
             tooltip: 'Asetukset',
-            onPressed: _openKeyScreen,
+            onPressed: _openSettings,
             icon: const Icon(Icons.settings_outlined),
           ),
         ],
@@ -372,141 +368,129 @@ class _MapScreenState extends State<MapScreen> {
               )
             : null,
       ),
-      body: ListenableBuilder(
-        listenable: widget.keyStore,
-        builder: (context, _) {
-          return Stack(
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: const LatLng(
+                Config.fallbackLat,
+                Config.fallbackLon,
+              ),
+              initialZoom: Config.fallbackZoom,
+              onPositionChanged: _onPositionChanged,
+              onMapReady: () =>
+                  _loadVisible(_mapController.camera.visibleBounds),
+            ),
             children: [
-              FlutterMap(
-                mapController: _mapController,
-                options: MapOptions(
-                  initialCenter: const LatLng(
-                    Config.fallbackLat,
-                    Config.fallbackLon,
-                  ),
-                  initialZoom: Config.fallbackZoom,
-                  onPositionChanged: _onPositionChanged,
-                  onMapReady: () =>
-                      _loadVisible(_mapController.camera.visibleBounds),
-                ),
-                children: [
-                  if (widget.keyStore.hasKey)
-                    TileLayer(
-                      urlTemplate: Config.mmlTileUrl(widget.keyStore.key),
-                      userAgentPackageName: Config.userAgentPackageName,
-                      maxNativeZoom: 18,
-                      tileProvider: widget.tileCache == null
-                          ? null
-                          : CachedTileProvider(
-                              store: widget.tileCache!,
-                              maxStale: TileCache.maxStale,
-                            ),
-                    ),
-                  if (_userPosition != null)
-                    CircleLayer(
-                      circles: [
-                        CircleMarker(
-                          point: _userPosition!,
-                          radius: 8,
-                          useRadiusInMeter: false,
-                          color: Colors.blue.withValues(alpha: 0.9),
-                          borderColor: Colors.white,
-                          borderStrokeWidth: 2,
+              TileLayer(
+                  urlTemplate: Config.tileUrl,
+                  userAgentPackageName: Config.userAgentPackageName,
+                  maxNativeZoom: 18,
+                  tileProvider: widget.tileCache == null
+                      ? null
+                      : CachedTileProvider(
+                          store: widget.tileCache!,
+                          maxStale: TileCache.maxStale,
                         ),
-                      ],
-                    ),
-                  MarkerClusterLayerWidget(
-                    options: MarkerClusterLayerOptions(
-                      markers: _buildMarkers(),
-                      maxClusterRadius: 45,
-                      size: const Size(40, 40),
-                      disableClusteringAtZoom: 17,
-                      padding: const EdgeInsets.all(50),
-                      onMarkerTap: (marker) {
-                        final spot = _spotsByKey[marker.key];
-                        if (spot != null) {
-                          SpotDetailsSheet.show(
-                            context,
-                            spot,
-                            contributions: _canContribute
-                                ? widget.contributions
-                                : null,
-                            location: _canContribute ? _location : null,
-                          );
-                        }
-                      },
-                      builder: (context, markers) =>
-                          ClusterIcon(count: markers.length),
-                    ),
-                  ),
-                ],
-              ),
-              Positioned(
-                top: 12,
-                left: 12,
-                right: 12,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    MapSearchBar(
-                      repository: widget.database,
-                      geocoder: _geocoder,
-                      apiKey: widget.keyStore.key,
-                      onPlaceSelected: _goToPlace,
-                      onSpotSelected: _goToSpot,
-                      onOpenSettings: _openKeyScreen,
-                    ),
-                    if (_loadError != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: _ErrorBanner(message: _loadError!),
-                      ),
-                    if (!widget.keyStore.hasKey)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: _MissingKeyBanner(onTap: _openKeyScreen),
-                      ),
-                  ],
                 ),
-              ),
-              const Positioned(
-                left: 12,
-                bottom: AttributionBar.height + 12,
-                child: MapLegend(),
-              ),
-              Positioned(
-                right: 12,
-                bottom: AttributionBar.height + 12,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_canContribute) ...[
-                      FloatingActionButton.small(
-                        heroTag: 'add-spot',
-                        tooltip: 'Ilmoita uusi invapaikka',
-                        onPressed: _openAddSpot,
-                        child: const Icon(Icons.add_location_alt_outlined),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    _TrackingButton(
-                      mode: _tracking,
-                      onPressed: _toggleTracking,
+              if (_userPosition != null)
+                CircleLayer(
+                  circles: [
+                    CircleMarker(
+                      point: _userPosition!,
+                      radius: 8,
+                      useRadiusInMeter: false,
+                      color: Colors.blue.withValues(alpha: 0.9),
+                      borderColor: Colors.white,
+                      borderStrokeWidth: 2,
                     ),
                   ],
                 ),
-              ),
-              // Attribuutio on lisenssiehto, joten se pidetään aina näkyvissä
-              // eikä piiloteta valikon taakse.
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: AttributionBar(showMapTiles: widget.keyStore.hasKey),
+              MarkerClusterLayerWidget(
+                options: MarkerClusterLayerOptions(
+                  markers: _buildMarkers(),
+                  maxClusterRadius: 45,
+                  size: const Size(40, 40),
+                  disableClusteringAtZoom: 17,
+                  padding: const EdgeInsets.all(50),
+                  onMarkerTap: (marker) {
+                    final spot = _spotsByKey[marker.key];
+                    if (spot != null) {
+                      SpotDetailsSheet.show(
+                        context,
+                        spot,
+                        contributions: _canContribute
+                            ? widget.contributions
+                            : null,
+                        location: _canContribute ? _location : null,
+                      );
+                    }
+                  },
+                  builder: (context, markers) =>
+                      ClusterIcon(count: markers.length),
+                ),
               ),
             ],
-          );
-        },
+          ),
+          Positioned(
+            top: 12,
+            left: 12,
+            right: 12,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                MapSearchBar(
+                  repository: widget.database,
+                  geocoder: _geocoder,
+                  onPlaceSelected: _goToPlace,
+                  onSpotSelected: _goToSpot,
+                  onOpenSettings: _openSettings,
+                ),
+                if (_loadError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: _ErrorBanner(message: _loadError!),
+                  ),
+              ],
+            ),
+          ),
+          const Positioned(
+            left: 12,
+            bottom: AttributionBar.height + 12,
+            child: MapLegend(),
+          ),
+          Positioned(
+            right: 12,
+            bottom: AttributionBar.height + 12,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_canContribute) ...[
+                  FloatingActionButton.small(
+                    heroTag: 'add-spot',
+                    tooltip: 'Ilmoita uusi invapaikka',
+                    onPressed: _openAddSpot,
+                    child: const Icon(Icons.add_location_alt_outlined),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                _TrackingButton(
+                  mode: _tracking,
+                  onPressed: _toggleTracking,
+                ),
+              ],
+            ),
+          ),
+          // Attribuutio on lisenssiehto, joten se pidetään aina näkyvissä
+          // eikä piiloteta valikon taakse.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: const AttributionBar(showMapTiles: true),
+          ),
+        ],
       ),
     );
   }
@@ -538,34 +522,6 @@ class _TrackingButton extends StatelessWidget {
       foregroundColor: isFollowing ? scheme.onPrimary : null,
       child: Icon(
         mode == TrackingMode.off ? Icons.location_disabled : Icons.my_location,
-      ),
-    );
-  }
-}
-
-/// Ilmoitus siitä, että taustakartta puuttuu avaimen puuttuessa.
-///
-/// Sovellus on tarkoituksella käyttökelpoinen ilman avainta: invapaikat ja
-/// navigointi toimivat, vain taustakartta jää tyhjäksi.
-class _MissingKeyBanner extends StatelessWidget {
-  const _MissingKeyBanner({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: EdgeInsets.zero,
-      color: Theme.of(context).colorScheme.secondaryContainer,
-      child: ListTile(
-        leading: const Icon(Icons.map_outlined),
-        title: const Text('Taustakartta puuttuu'),
-        subtitle: const Text(
-          'Lisää maksuton Maanmittauslaitoksen API-avain nähdäksesi kartan ja '
-          'ottaaksesi osoitehaun käyttöön. Invapaikat ja navigointi toimivat jo nyt.',
-        ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
       ),
     );
   }

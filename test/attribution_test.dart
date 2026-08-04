@@ -77,7 +77,6 @@ void main() {
         MaterialApp(
           home: MapScreen(
             database: FakeSpotRepository([]),
-            keyStore: await fakeKeyStore(),
             geocoder: fakeGeocoder(),
           ),
         ),

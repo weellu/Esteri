@@ -1,22 +1,19 @@
 import 'package:flutter/material.dart';
 
-import '../config.dart';
 import '../data/spot_data_source.dart';
 import '../services/data_updater.dart';
-import '../services/map_key_store.dart';
-import '../services/navigation_launcher.dart';
 import 'licenses_screen.dart';
 
-/// Asetukset: karttatiilien API-avain ja aineiston päivitys.
+/// Asetukset: aineiston päivitys ja lisenssit.
+///
+/// Karttatiilien API-avainta ei kysytä käyttäjältä. Avain on taustapalvelussa,
+/// eikä sitä ole olemassa asiakaspäässä lainkaan.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
     super.key,
-    required this.store,
     this.dataSource,
     this.updater,
   });
-
-  final MapKeyStore store;
 
   /// Null testeissä ja silloin kun aineistoa ei voi päivittää.
   final SpotDataSource? dataSource;
@@ -27,12 +24,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.store.key);
-
-  bool _checkingKey = false;
-  MapKeyCheck? _keyResult;
-
   bool _updating = false;
   String? _updateMessage;
   Map<String, String> _metadata = const {};
@@ -43,39 +34,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadMetadata();
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
   Future<void> _loadMetadata() async {
     final source = widget.dataSource;
     if (source == null) return;
     final meta = await source.metadata();
     if (mounted) setState(() => _metadata = meta);
-  }
-
-  Future<void> _saveAndVerifyKey() async {
-    setState(() {
-      _checkingKey = true;
-      _keyResult = null;
-    });
-
-    final value = _controller.text.trim();
-    final check = await MapKeyStore.verify(value);
-
-    // Verkkovirhe ei tarkoita väärää avainta, joten avain tallennetaan
-    // muutenkin kuin onnistuneella tarkistuksella.
-    if (check.isOk || check.status == MapKeyStatus.networkError) {
-      await widget.store.save(value);
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _checkingKey = false;
-      _keyResult = check;
-    });
   }
 
   Future<void> _updateData() async {
@@ -122,63 +85,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Text('Karttatiilien API-avain', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Text(
-            'Taustakartta ja osoitehaku tulevat Maanmittauslaitokselta ja '
-            'vaativat API-avaimen. Avain on ilmainen: se luodaan MML:n '
-            'OmaTili-palvelussa eikä vaadi laskutustiliä tai luottokorttia. '
-            'Avain tallennetaan vain tälle laitteelle.',
-            style: theme.textTheme.bodyMedium,
-          ),
-          TextButton.icon(
-            onPressed: () =>
-                NavigationLauncher.openUrl(Config.mmlKeyInstructionsUrl),
-            icon: const Icon(Icons.open_in_new, size: 18),
-            label: const Text('Ohje avaimen luomiseen'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _controller,
-            autocorrect: false,
-            enableSuggestions: false,
-            decoration: const InputDecoration(
-              labelText: 'API-avain',
-              hintText: 'Liitä avain tähän',
-              border: OutlineInputBorder(),
-            ),
-            onSubmitted: (_) => _saveAndVerifyKey(),
-          ),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: _checkingKey ? null : _saveAndVerifyKey,
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-            child: _checkingKey
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Tallenna ja testaa'),
-          ),
-          if (_keyResult != null) ...[
-            const SizedBox(height: 12),
-            _Notice(
-              text: _keyResult!.message,
-              isError: !_keyResult!.isOk,
-            ),
-          ],
-          const SizedBox(height: 12),
-          Text(
-            'Ilman avainta invapaikat näkyvät kartalla ja navigointi toimii, '
-            'mutta taustakartta jää tyhjäksi ja osoitehaku ei ole käytössä.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-
-          const Divider(height: 40),
-
           Text('Invapaikka-aineisto', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           if (_metadata.isNotEmpty)

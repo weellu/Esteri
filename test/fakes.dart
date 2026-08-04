@@ -9,8 +9,6 @@ import 'package:esteri/data/parking_spot.dart';
 import 'package:esteri/data/spot_database.dart';
 import 'package:esteri/services/geocoder.dart';
 import 'package:esteri/services/location_service.dart';
-import 'package:esteri/services/map_key_store.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// Muistinvarainen korvike SQLitelle, jotta näkymien logiikan voi testata
 /// ilman natiiveja liitännäisiä.
@@ -94,13 +92,6 @@ ParkingSpot spotAt(
   confirmations: confirmations,
   disputes: disputes,
 );
-
-Future<MapKeyStore> fakeKeyStore({String? key}) async {
-  SharedPreferences.setMockInitialValues(
-    key == null ? <String, Object>{} : <String, Object>{'mml_api_key': key},
-  );
-  return MapKeyStore.load();
-}
 
 /// Ohjattava sijaintilähde: testi päättää luvan ja syöttää sijainnit itse.
 class FakeLocationService implements LocationService {

@@ -21,7 +21,6 @@ class MapSearchBar extends StatefulWidget {
     super.key,
     required this.repository,
     required this.geocoder,
-    required this.apiKey,
     required this.onSpotSelected,
     required this.onPlaceSelected,
     this.onOpenSettings,
@@ -29,7 +28,6 @@ class MapSearchBar extends StatefulWidget {
 
   final SpotRepository repository;
   final MmlGeocoder geocoder;
-  final String apiKey;
   final ValueChanged<ParkingSpot> onSpotSelected;
   final ValueChanged<GeocodeResult> onPlaceSelected;
   final VoidCallback? onOpenSettings;
@@ -96,7 +94,7 @@ class _MapSearchBarState extends State<MapSearchBar> {
     List<GeocodeResult> places = const [];
     String? error;
     try {
-      places = await widget.geocoder.search(query, apiKey: widget.apiKey, limit: 6);
+      places = await widget.geocoder.search(query, limit: 6);
     } on GeocoderException catch (exception) {
       error = exception.message;
     } catch (_) {

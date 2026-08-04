@@ -7,7 +7,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:esteri/config.dart';
 import 'package:esteri/services/geocoder.dart';
 import 'package:esteri/services/location_service.dart';
-import 'package:esteri/services/map_key_store.dart';
 import 'package:esteri/ui/map_screen.dart';
 import 'package:esteri/ui/spot_marker.dart';
 
@@ -15,8 +14,7 @@ import 'fakes.dart';
 
 Future<void> pumpMap(
   WidgetTester tester,
-  FakeSpotRepository repo,
-  MapKeyStore store, {
+  FakeSpotRepository repo, {
   MmlGeocoder? geocoder,
   LocationService? locationService,
   CacheStore? tileCache,
@@ -25,7 +23,6 @@ Future<void> pumpMap(
     MaterialApp(
       home: MapScreen(
         database: repo,
-        keyStore: store,
         geocoder: geocoder ?? fakeGeocoder(),
         locationService: locationService,
         tileCache: tileCache,
@@ -43,7 +40,7 @@ void main() {
     final repo = FakeSpotRepository([
       spotAt(Config.fallbackLat, Config.fallbackLon),
     ]);
-    await pumpMap(tester, repo, await fakeKeyStore());
+    await pumpMap(tester, repo);
 
     expect(
       repo.requestedBounds,
@@ -66,7 +63,7 @@ void main() {
         capacity: 2,
       ),
     ]);
-    await pumpMap(tester, repo, await fakeKeyStore());
+    await pumpMap(tester, repo);
 
     expect(find.byType(SpotMarkerIcon), findsOneWidget);
 
@@ -90,7 +87,6 @@ void main() {
       await pumpMap(
         tester,
         repo,
-        await fakeKeyStore(key: 'avain'),
         geocoder: fakeGeocoder(
           results: [
             (
@@ -124,20 +120,6 @@ void main() {
     },
   );
 
-  testWidgets('ilman API-avainta näytetään huomautus', (tester) async {
-    await pumpMap(tester, FakeSpotRepository([]), await fakeKeyStore());
-    expect(find.text('Taustakartta puuttuu'), findsOneWidget);
-  });
-
-  testWidgets('avaimen kanssa huomautusta ei näytetä', (tester) async {
-    await pumpMap(
-      tester,
-      FakeSpotRepository([]),
-      await fakeKeyStore(key: 'testiavain'),
-    );
-    expect(find.text('Taustakartta puuttuu'), findsNothing);
-  });
-
   testWidgets('kyselyn epäonnistuminen näytetään eikä jätetä tyhjäksi kartaksi', (
     tester,
   ) async {
@@ -148,7 +130,6 @@ void main() {
       MaterialApp(
         home: MapScreen(
           database: FailingSpotRepository(),
-          keyStore: await fakeKeyStore(key: 'avain'),
           geocoder: fakeGeocoder(),
         ),
       ),
@@ -164,13 +145,12 @@ void main() {
     await pumpMap(
       tester,
       FakeSpotRepository([spotAt(Config.fallbackLat, Config.fallbackLon)]),
-      await fakeKeyStore(),
     );
     expect(find.text('Invapaikkoja ei voitu ladata.'), findsNothing);
   });
 
   testWidgets('hakupalkki ja selite näkyvät kartalla', (tester) async {
-    await pumpMap(tester, FakeSpotRepository([]), await fakeKeyStore());
+    await pumpMap(tester, FakeSpotRepository([]));
     expect(find.byType(TextField), findsOneWidget);
     expect(find.byType(MapLegend), findsOneWidget);
   });
@@ -186,7 +166,6 @@ void main() {
       await pumpMap(
         tester,
         repo,
-        await fakeKeyStore(),
         locationService: location,
       );
 
@@ -216,7 +195,6 @@ void main() {
       await pumpMap(
         tester,
         FakeSpotRepository([]),
-        await fakeKeyStore(),
         locationService: location,
       );
 
@@ -242,7 +220,6 @@ void main() {
       await pumpMap(
         tester,
         repo,
-        await fakeKeyStore(),
         locationService: location,
       );
 
@@ -267,7 +244,6 @@ void main() {
         await pumpMap(
           tester,
           repo,
-          await fakeKeyStore(),
           locationService: location,
         );
 
@@ -294,7 +270,6 @@ void main() {
       await pumpMap(
         tester,
         FakeSpotRepository([]),
-        await fakeKeyStore(),
         locationService: location,
       );
       // Seuranta on jo päällä automaattisesti, joten yksi painallus sammuttaa.
@@ -316,7 +291,6 @@ void main() {
       await pumpMap(
         tester,
         FakeSpotRepository([]),
-        await fakeKeyStore(),
         locationService: location,
       );
 
@@ -335,7 +309,6 @@ void main() {
       await pumpMap(
         tester,
         FakeSpotRepository([]),
-        await fakeKeyStore(),
         locationService: location,
       );
 
@@ -351,7 +324,6 @@ void main() {
       await pumpMap(
         tester,
         FakeSpotRepository([]),
-        await fakeKeyStore(key: 'avain'),
         tileCache: MemCacheStore(),
       );
 
@@ -367,7 +339,6 @@ void main() {
       await pumpMap(
         tester,
         FakeSpotRepository([]),
-        await fakeKeyStore(key: 'avain'),
       );
 
       final layer = tester.widget<TileLayer>(find.byType(TileLayer));

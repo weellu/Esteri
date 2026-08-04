@@ -42,7 +42,7 @@ void main() {
             jsonResponse(featureCollection([feature(23.7610, 61.4978)]))),
       );
 
-      final results = await geocoder.search('Hämeenkatu', apiKey: 'avain');
+      final results = await geocoder.search('Hämeenkatu');
 
       expect(results, hasLength(1));
       expect(results.single.lat, closeTo(61.4978, 1e-6));
@@ -57,7 +57,7 @@ void main() {
             jsonResponse(featureCollection([feature(61.4978, 23.7610)]))),
       );
 
-      final results = await geocoder.search('Hämeenkatu', apiKey: 'avain');
+      final results = await geocoder.search('Hämeenkatu');
 
       expect(results.single.lat, closeTo(61.4978, 1e-6));
       expect(results.single.lon, closeTo(23.7610, 1e-6));
@@ -71,10 +71,10 @@ void main() {
             jsonResponse(featureCollection([feature(18.07, 59.33)]))),
       );
 
-      expect(await geocoder.search('Tukholma', apiKey: 'avain'), isEmpty);
+      expect(await geocoder.search('Tukholma'), isEmpty);
     });
 
-    test('lähettää avaimen ja hakusanan pyynnössä', () async {
+    test('pyynnössä on hakusana ja tulosmäärä', () async {
       Uri? captured;
       final geocoder = MmlGeocoder(
         client: MockClient((request) async {
@@ -83,15 +83,13 @@ void main() {
         }),
       );
 
-      await geocoder.search('Keskustori', apiKey: 'salainen');
+      await geocoder.search('Keskustori', limit: 6);
 
       expect(captured!.queryParameters['text'], 'Keskustori');
-      expect(captured!.queryParameters['api-key'], 'salainen');
-      expect(captured!.queryParameters['sources'], contains('addresses'));
-      expect(captured!.queryParameters['sources'], contains('geographic-names'));
+      expect(captured!.queryParameters['size'], '6');
     });
 
-    test('ei hae kiinteistötunnuksia eikä karttalehtiä', () async {
+    test('avainta ei lähetetä asiakkaalta', () async {
       Uri? captured;
       final geocoder = MmlGeocoder(
         client: MockClient((request) async {
@@ -100,11 +98,13 @@ void main() {
         }),
       );
 
-      await geocoder.search('123', apiKey: 'avain');
+      await geocoder.search('Keskustori');
 
-      final sources = captured!.queryParameters['sources']!;
-      expect(sources, isNot(contains('cadastral-units')));
-      expect(sources, isNot(contains('mapsheets')));
+      // Koko muutoksen ydin: avainta ei ole asiakaspäässä olemassa, joten
+      // sitä ei voi vahingossakaan päätyä pyyntöön. Kieli ja lähteet
+      // kiinnitetään Workerissa, joten nekään eivät kulje täältä.
+      expect(captured.toString(), isNot(contains('api-key')));
+      expect(captured!.queryParameters.keys, unorderedEquals(['text', 'size']));
     });
 
     test('tyhjä hakusana ei tee verkkokutsua', () async {
@@ -116,38 +116,27 @@ void main() {
         }),
       );
 
-      expect(await geocoder.search('   ', apiKey: 'avain'), isEmpty);
+      expect(await geocoder.search('   '), isEmpty);
       expect(called, isFalse);
     });
 
-    test('puuttuva avain kerrotaan käyttäjälle ymmärrettävästi', () async {
-      final geocoder = MmlGeocoder(
-        client: MockClient((_) async => jsonResponse('')),
-      );
+    test('taustapalvelun vika kerrotaan syyttämättä käyttäjää', () async {
+      for (final status in [502, 503]) {
+        final geocoder = MmlGeocoder(
+          client: MockClient((_) async => jsonResponse('nope', status)),
+        );
 
-      expect(
-        () => geocoder.search('Hämeenkatu', apiKey: ''),
-        throwsA(isA<GeocoderException>().having(
-          (e) => e.message,
-          'message',
-          contains('API-avaimen'),
-        )),
-      );
-    });
-
-    test('401 tunnistetaan kelpaamattomaksi avaimeksi', () async {
-      final geocoder = MmlGeocoder(
-        client: MockClient((_) async => jsonResponse('nope', 401)),
-      );
-
-      expect(
-        () => geocoder.search('Hämeenkatu', apiKey: 'vaara'),
-        throwsA(isA<GeocoderException>().having(
-          (e) => e.message,
-          'message',
-          contains('ei kelpaa'),
-        )),
-      );
+        // Avainta ei ole enää asiakkaalla, joten käyttäjää ei pidä ohjata
+        // korjaamaan asetuksia — vika on taustapalvelussa tai sen takana.
+        await expectLater(
+          () => geocoder.search('Hämeenkatu'),
+          throwsA(isA<GeocoderException>().having(
+            (e) => e.message,
+            'message status $status',
+            allOf(contains('käytettävissä'), isNot(contains('avain'))),
+          )),
+        );
+      }
     });
 
     test('rikkinäinen vastaus ei kaada sovellusta', () async {
@@ -156,7 +145,7 @@ void main() {
       );
 
       expect(
-        () => geocoder.search('Hämeenkatu', apiKey: 'avain'),
+        () => geocoder.search('Hämeenkatu'),
         throwsA(isA<GeocoderException>()),
       );
     });
@@ -170,7 +159,7 @@ void main() {
             ]))),
       );
 
-      final results = await geocoder.search('Tampere', apiKey: 'avain');
+      final results = await geocoder.search('Tampere');
 
       expect(results[0].region, isNull, reason: 'Tampere on jo labelissa');
       expect(results[1].region, 'Tampere');
@@ -189,7 +178,7 @@ void main() {
       // Hakusanan on ylitettävä minQueryLength, muuten tämä menisi läpi
       // siksi ettei hakua tehdä lainkaan — ei siksi että nimetön osuma
       // ohitetaan.
-      expect(await geocoder.search('xy', apiKey: 'avain'), isEmpty);
+      expect(await geocoder.search('xy'), isEmpty);
       expect(called, isTrue);
     });
 
@@ -199,7 +188,7 @@ void main() {
                 [feature(23.7610, 61.4978, label: 'Pyynikintörmä')]))),
       );
 
-      final results = await geocoder.search('Pyynikki', apiKey: 'avain');
+      final results = await geocoder.search('Pyynikki');
       expect(results.single.label, 'Pyynikintörmä');
     });
   });
@@ -214,7 +203,7 @@ void main() {
         }),
       );
 
-      expect(await geocoder.search('H', apiKey: 'avain'), isEmpty);
+      expect(await geocoder.search('H'), isEmpty);
       expect(called, isFalse);
     });
 
@@ -230,7 +219,7 @@ void main() {
 
       // Ii on kunta. Jos minimipituus nostetaan kolmeen, se muuttuu
       // hakukelvottomaksi ja tämä testi kaatuu — tarkoituksella.
-      final results = await geocoder.search('Ii', apiKey: 'avain');
+      final results = await geocoder.search('Ii');
 
       expect(called, isTrue);
       expect(results.single.label, 'Ii');
@@ -246,8 +235,8 @@ void main() {
         }),
       );
 
-      final first = await geocoder.search('Hämeenkatu', apiKey: 'avain');
-      final second = await geocoder.search('Hämeenkatu', apiKey: 'avain');
+      final first = await geocoder.search('Hämeenkatu');
+      final second = await geocoder.search('Hämeenkatu');
 
       expect(calls, 1);
       expect(second.single.label, first.single.label);
@@ -263,8 +252,8 @@ void main() {
         }),
       );
 
-      await geocoder.search('Hämeenkatu', apiKey: 'avain');
-      await geocoder.search('hämeenkatu', apiKey: 'avain');
+      await geocoder.search('Hämeenkatu');
+      await geocoder.search('hämeenkatu');
 
       expect(calls, 1);
     });
@@ -279,8 +268,8 @@ void main() {
         }),
       );
 
-      await geocoder.search('Hämeenkatu', apiKey: 'avain', limit: 3);
-      await geocoder.search('Hämeenkatu', apiKey: 'avain', limit: 6);
+      await geocoder.search('Hämeenkatu', limit: 3);
+      await geocoder.search('Hämeenkatu', limit: 6);
 
       expect(calls, 2);
     });
@@ -296,8 +285,8 @@ void main() {
 
       // "Ei löytynyt mitään" on yhtä pätevä vastaus kuin osuma, eikä sen
       // toistaminen tuota uutta tietoa.
-      await geocoder.search('Ei tällaista', apiKey: 'avain');
-      await geocoder.search('Ei tällaista', apiKey: 'avain');
+      await geocoder.search('Ei tällaista');
+      await geocoder.search('Ei tällaista');
 
       expect(calls, 1);
     });
@@ -314,10 +303,10 @@ void main() {
       );
 
       await expectLater(
-        () => geocoder.search('Hämeenkatu', apiKey: 'avain'),
+        () => geocoder.search('Hämeenkatu'),
         throwsA(isA<GeocoderException>()),
       );
-      final retry = await geocoder.search('Hämeenkatu', apiKey: 'avain');
+      final retry = await geocoder.search('Hämeenkatu');
 
       // Verkkokatkos on ohimenevä. Jos se jäisi välimuistiin, haku pysyisi
       // rikki sovelluksen uudelleenkäynnistykseen asti.
@@ -335,14 +324,14 @@ void main() {
         }),
       );
 
-      await geocoder.search('ensimmäinen', apiKey: 'avain');
+      await geocoder.search('ensimmäinen');
       for (var i = 0; i < MmlGeocoder.maxCacheEntries; i++) {
-        await geocoder.search('täyte $i', apiKey: 'avain');
+        await geocoder.search('täyte $i');
       }
       final callsBefore = calls;
 
       // Vanhin on pudonnut pois, joten sama haku menee taas verkkoon.
-      await geocoder.search('ensimmäinen', apiKey: 'avain');
+      await geocoder.search('ensimmäinen');
 
       expect(calls, callsBefore + 1);
     });
@@ -353,7 +342,7 @@ void main() {
             featureCollection([feature(23.7610, 61.4978)]))),
       );
 
-      final results = await geocoder.search('Hämeenkatu', apiKey: 'avain');
+      final results = await geocoder.search('Hämeenkatu');
 
       expect(() => results.clear(), throwsUnsupportedError);
     });

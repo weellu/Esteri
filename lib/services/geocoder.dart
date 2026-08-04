@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../config.dart';
+
 /// Geokoodauksen tulos: osoite tai paikannimi karttasijainteineen.
 class GeocodeResult {
   const GeocodeResult({
@@ -30,17 +32,19 @@ class GeocoderException implements Exception {
   String toString() => message;
 }
 
-/// Maanmittauslaitoksen geokoodauspalvelu (Pelias-pohjainen).
+/// Osoite- ja paikannimihaku oman Workerin kautta.
 ///
-/// Käyttää samaa maksutonta API-avainta kuin karttatiilet, joten käyttäjän
-/// ei tarvitse rekisteröityä erikseen hakua varten.
+/// Vastausmuoto on Maanmittauslaitoksen Pelias-rajapinnan GeoJSON, mutta
+/// sovellus ei kutsu MML:ää suoraan: API-avain on Workerissa eikä laitteella.
+/// Siksi tämä ei ota vastaan avainta lainkaan — sellaista ei ole olemassa
+/// asiakaspäässä.
 class MmlGeocoder {
-  MmlGeocoder({http.Client? client}) : _client = client ?? http.Client();
+  MmlGeocoder({http.Client? client, String? baseUrl})
+      : _client = client ?? http.Client(),
+        _baseUrl = baseUrl ?? Config.geocodeUrl;
 
   final http.Client _client;
-
-  static const String _baseUrl =
-      'https://avoin-paikkatieto.maanmittauslaitos.fi/geocoding/v2/pelias/search';
+  final String _baseUrl;
 
   /// Lyhin hakusana, joka lähetetään verkkoon.
   ///
@@ -66,11 +70,6 @@ class MmlGeocoder {
 
   final Map<String, List<GeocodeResult>> _cache = {};
 
-  /// Haetaan vain osoitteita ja paikannimiä. Kiinteistötunnukset ja
-  /// karttalehdet jätetään pois — ne eivät auta invapaikan etsijää.
-  static const String _sources =
-      'addresses,interpolated-road-addresses,geographic-names';
-
   /// Suomen leveys- ja pituusasteet eivät mene päällekkäin (lat 59.5–70.1,
   /// lon 19.0–31.7), joten akselijärjestys voidaan päätellä arvoista.
   /// Tämä suojaa siltä, että palvelu vaihtaisi CRS84:n ja EPSG:4326:n
@@ -86,18 +85,9 @@ class MmlGeocoder {
     return null;
   }
 
-  Future<List<GeocodeResult>> search(
-    String query, {
-    required String apiKey,
-    int limit = 8,
-  }) async {
+  Future<List<GeocodeResult>> search(String query, {int limit = 8}) async {
     final text = query.trim();
     if (text.length < minQueryLength) return const [];
-    if (apiKey.isEmpty) {
-      throw const GeocoderException(
-        'Haku osoitteella vaatii API-avaimen. Lisää se asetuksista.',
-      );
-    }
 
     // Pelias ei erottele kirjainkokoa, joten "Hämeenkatu" ja "hämeenkatu"
     // ovat välimuistin kannalta sama haku.
@@ -110,12 +100,11 @@ class MmlGeocoder {
       return cached;
     }
 
+    // Kieli ja lähteet kiinnitetään Workerissa, ei täällä: proxy ei välitä
+    // mielivaltaista MML-pyyntöä vaan täsmälleen tämän haun.
     final uri = Uri.parse(_baseUrl).replace(queryParameters: {
       'text': text,
       'size': '$limit',
-      'lang': 'fi',
-      'sources': _sources,
-      'api-key': apiKey,
     });
 
     final http.Response response;
@@ -125,9 +114,13 @@ class MmlGeocoder {
       throw GeocoderException('Hakua ei voitu tehdä: verkkovirhe.');
     }
 
-    if (response.statusCode == 401 || response.statusCode == 403) {
+    // Virhe ei ole enää koskaan käyttäjän avaimessa, koska avainta ei ole
+    // asiakaspäässä. 502 ja 503 tarkoittavat, että vika on taustapalvelussa
+    // tai sen takana — kumpaankaan käyttäjä ei voi vaikuttaa, joten häntä ei
+    // myöskään pyydetä korjaamaan mitään.
+    if (response.statusCode == 502 || response.statusCode == 503) {
       throw const GeocoderException(
-        'API-avain ei kelpaa hakuun. Tarkista se asetuksista.',
+        'Haku ei ole juuri nyt käytettävissä. Yritä hetken kuluttua uudelleen.',
       );
     }
     if (response.statusCode != 200) {

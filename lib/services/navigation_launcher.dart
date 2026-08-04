@@ -6,8 +6,9 @@ import '../data/parking_spot.dart';
 
 /// Avaa puhelimen oman karttasovelluksen reittiohjeisiin.
 ///
-/// Tämä ei vaadi API-avainta millään alustalla — toisin kuin sovelluksen
-/// sisäinen kartta.
+/// Tämä ei kulje taustapalvelun kautta millään alustalla — toisin kuin
+/// sovelluksen sisäinen kartta ja haku. Navigointi toimii siis silloinkin,
+/// kun Worker on nurin.
 class NavigationLauncher {
   const NavigationLauncher._();
 

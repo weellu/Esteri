@@ -1,41 +1,34 @@
 /// Sovelluksen asetukset.
 ///
-/// Karttatiilet tulevat Maanmittauslaitoksen maksuttomasta
-/// karttakuvapalvelusta, joka vaatii API-avaimen. Avain luodaan MML:n
-/// OmaTili-palvelussa eikä se vaadi laskutustiliä tai luottokorttia.
+/// Karttatiilet ja osoitehaku tulevat Maanmittauslaitokselta, mutta sovellus
+/// ei kutsu MML:ää suoraan. Molemmat kulkevat oman Workerin kautta, joka
+/// lisää API-avaimen palvelinpäässä.
 ///
-/// Avain annetaan sovelluksen asetuksissa ja tallennetaan laitteelle.
-/// Vaihtoehtoisesti sen voi antaa käännösaikana kehitystä varten:
+/// Sovelluksessa ei siis ole avainta lainkaan — ei käyttäjän syöttämää eikä
+/// käännökseen upotettua. Jälkimmäinen ei olisi salaisuus: `String
+/// .fromEnvironment` päätyy binääriin selkokielisenä.
 ///
-///     flutter run --dart-define=MML_API_KEY=<avain>
-///
-/// Käännösaikainen arvo toimii oletuksena, jonka käyttäjä voi korvata.
+/// Ainoa käännösaikainen arvo on taustapalvelun osoite, [contributionApiBase].
 library;
 
 class Config {
   const Config._();
 
-  /// Kehityskäyttöön tarkoitettu oletusavain. Tyhjä, ellei annettu.
-  static const String defaultMmlApiKey = String.fromEnvironment('MML_API_KEY');
-
-  /// MML:n karttakuvapalvelun RESTful WMTS -osoite.
+  /// Taustakartan tiiliosoite.
   ///
-  /// Huom: WMTS:n polkujärjestys on {TileMatrix}/{TileRow}/{TileCol} eli
-  /// z/y/x — ei tavanomainen z/x/y. Väärä järjestys tuottaa kartan, joka
-  /// näyttää lataavan mutta esittää väärää aluetta.
-  static String mmlTileUrl(String apiKey) =>
-      'https://avoin-karttakuva.maanmittauslaitos.fi/avoin/wmts/1.0.0'
-      '/taustakartta/default/WGS84_Pseudo-Mercator/{z}/{y}/{x}.png'
-      '?api-key=$apiKey';
+  /// Osoittaa omaan Workeriin, ei suoraan Maanmittauslaitokselle. MML:n
+  /// API-avain on Workerissa eikä sovelluksessa: kaikki mikä lähetetään
+  /// laitteelle on julkista, joten käännökseen upotettu avain olisi
+  /// kaivettavissa binäärista eikä vaihdettavissa ilman kauppakierrosta.
+  ///
+  /// Huom: polkujärjestys on {z}/{y}/{x}, koska WMTS:n järjestys on
+  /// {TileMatrix}/{TileRow}/{TileCol} — ei tavanomainen z/x/y. Worker olettaa
+  /// saman järjestyksen. Väärä järjestys tuottaa kartan, joka näyttää
+  /// lataavan mutta esittää väärää aluetta.
+  static String get tileUrl => '$contributionApiBase/v1/tiles/{z}/{y}/{x}.png';
 
-  /// Yksittäinen tiili avaimen kelpoisuuden testaamiseen (Tampereen seutu).
-  static String mmlProbeTileUrl(String apiKey) =>
-      'https://avoin-karttakuva.maanmittauslaitos.fi/avoin/wmts/1.0.0'
-      '/taustakartta/default/WGS84_Pseudo-Mercator/6/19/37.png'
-      '?api-key=$apiKey';
-
-  static const String mmlKeyInstructionsUrl =
-      'https://www.maanmittauslaitos.fi/rajapinnat/api-avaimen-ohje';
+  /// Osoite- ja paikannimihaku. Sama Worker, sama syy.
+  static String get geocodeUrl => '$contributionApiBase/v1/geocode';
 
   /// Tunniste tiilipyynnöissä. OSM:n omaa tiilipalvelinta ei käytetä
   /// lainkaan, koska sen käyttöehdot eivät salli sovellusjakelua.
@@ -72,26 +65,25 @@ class Config {
   /// aineiston kasvaessa.
   static const int maxSpotsPerViewport = 2000;
 
-  /// Käyttäjien ilmoitusten vastaanotto (Cloudflare Worker, ks. `backend/`).
+  /// Taustapalvelun osoite (Cloudflare Worker, ks. `backend/`).
   ///
-  /// **Tyhjä oletusarvo on tarkoituksellinen.** Kun osoitetta ei ole, sovellus
-  /// piilottaa vahvistus- ja lisäysnapit kokonaan — nappi, joka lähettää
-  /// olemattomaan osoitteeseen, on huonompi kuin ei nappia lainkaan.
-  ///
-  /// Käytössä oleva Worker on `https://esteri-api.weellu.workers.dev`, ja se
-  /// annetaan käännösaikana:
+  /// Sama Worker hoitaa kolme asiaa: karttatiilet, osoitehaun ja käyttäjien
+  /// ilmoitusten vastaanoton. Se annetaan käännösaikana:
   ///
   ///     flutter run --dart-define=ESTERI_API=https://esteri-api.weellu.workers.dev
   ///
-  /// Lippu tarvitaan myös `flutter build`iin. Ilman sitä julkaisupaketista
-  /// puuttuvat ilmoitustoiminnot kokonaan eikä käännös huomauta siitä —
-  /// versio 1.0.1+3 lähti näin.
-  ///
-  /// Lähetys ei kuulu lukupolkuun: kartta, haku ja navigointi toimivat
-  /// ilman tätä palvelua täsmälleen kuten ennenkin.
+  /// **Lippu tarvitaan myös `flutter build`iin, eikä sen puuttuminen ole enää
+  /// osittainen puute.** Aiemmin ilman sitä jäivät pois vain ilmoitustoiminnot,
+  /// ja versio 1.0.1+3 lähti kauppaan sellaisena. Nyt myös taustakartta ja haku
+  /// kulkevat tämän kautta, joten ilman osoitetta sovellus ei ole vajaa vaan
+  /// rikki. Siksi [isConfigured] tarkistetaan käynnistyksessä ja puuttuva
+  /// osoite pysäyttää sovelluksen näkyvään virheeseen — hiljainen
+  /// rappeutuminen olisi juuri se vika, joka jo kerran päätyi julkaisuun.
   static const String contributionApiBase = String.fromEnvironment(
     'ESTERI_API',
   );
+
+  static bool get isConfigured => contributionApiBase.isNotEmpty;
 
   static bool get contributionsEnabled => contributionApiBase.isNotEmpty;
 

@@ -10,7 +10,6 @@ Future<void> pumpSearchBar(
   WidgetTester tester, {
   required FakeSpotRepository repository,
   required MmlGeocoder geocoder,
-  String apiKey = 'avain',
   ValueChanged<GeocodeResult>? onPlace,
   ValueChanged<ParkingSpot>? onSpot,
 }) async {
@@ -20,7 +19,6 @@ Future<void> pumpSearchBar(
         body: MapSearchBar(
           repository: repository,
           geocoder: geocoder,
-          apiKey: apiKey,
           onPlaceSelected: onPlace ?? (_) {},
           onSpotSelected: onSpot ?? (_) {},
         ),
@@ -91,35 +89,39 @@ void main() {
     expect(find.text('Keskustorin invapaikka'), findsOneWidget);
   });
 
-  testWidgets('ilman avainta paikallinen haku toimii silti', (tester) async {
-    // Osoitehaku vaatii avaimen, mutta aineiston oma haku ei — käyttäjä ei
-    // saa jäädä täysin ilman hakua vain koska avain puuttuu.
+  testWidgets('geokoodauksen kaatuessa paikallinen haku toimii silti', (
+    tester,
+  ) async {
+    // Osoitehaku kulkee verkon yli, aineiston oma haku ei. Käyttäjä ei saa
+    // jäädä täysin ilman hakua vain koska taustapalvelu on nurin.
     await pumpSearchBar(
       tester,
-      apiKey: '',
       repository: FakeSpotRepository(
         [],
         searchResults: [spotAt(61.4978, 23.7610, name: 'Hämeenkadun invapaikka')],
       ),
-      geocoder: fakeGeocoder(),
+      geocoder: fakeGeocoder(status: 503),
     );
 
     await typeQuery(tester, 'Hämeenkatu');
 
     expect(find.text('Hämeenkadun invapaikka'), findsOneWidget);
-    expect(find.textContaining('API-avaimen'), findsOneWidget);
+    expect(find.textContaining('käytettävissä'), findsOneWidget);
   });
 
-  testWidgets('kelpaamaton avain kerrotaan käyttäjälle', (tester) async {
+  testWidgets('taustapalvelun vika ei syytä käyttäjää', (tester) async {
     await pumpSearchBar(
       tester,
       repository: FakeSpotRepository([]),
-      geocoder: fakeGeocoder(status: 401),
+      geocoder: fakeGeocoder(status: 502),
     );
 
     await typeQuery(tester, 'Hämeenkatu');
 
-    expect(find.textContaining('ei kelpaa'), findsOneWidget);
+    // Avainta ei ole enää asiakkaalla, joten käyttäjää ei pidä ohjata
+    // korjaamaan asetuksia — hän ei voi tehdä asialle mitään.
+    expect(find.textContaining('käytettävissä'), findsOneWidget);
+    expect(find.textContaining('avain'), findsNothing);
   });
 
   testWidgets('tyhjä tulos kerrotaan selvästi', (tester) async {
