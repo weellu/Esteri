@@ -42,6 +42,30 @@ class MmlGeocoder {
   static const String _baseUrl =
       'https://avoin-paikkatieto.maanmittauslaitos.fi/geocoding/v2/pelias/search';
 
+  /// Lyhin hakusana, joka lähetetään verkkoon.
+  ///
+  /// Yhden merkin haku ei tuota käyttökelpoista tulosta, mutta maksaa saman
+  /// verran kuin mikä tahansa muu: hakupalkin viive laukaisee kutsun aina kun
+  /// kirjoittaja pysähtyy yli 350 ms:ksi, myös heti ensimmäisen kirjaimen
+  /// jälkeen.
+  ///
+  /// Raja on kaksi eikä kolme, koska **Ii** on kunta. Kolmen merkin raja
+  /// tekisi siitä hakukelvottoman.
+  static const int minQueryLength = 2;
+
+  /// Muistivälimuisti onnistuneille hauille.
+  ///
+  /// Sama hakusana toistuu käytössä jatkuvasti: kirjoitusvirheen korjaus
+  /// askelpalauttimella palaa lyhyempään sanaan, joka on juuri haettu, ja sama
+  /// osoite haetaan usein uudelleen saman istunnon aikana.
+  ///
+  /// Virheitä ei talleteta. Verkkovirhe on ohimenevä tila, eikä sitä pidä
+  /// jäädyttää välimuistiin — muuten yksi katkos rikkoisi haun siihen asti,
+  /// kunnes sovellus käynnistetään uudelleen.
+  static const int maxCacheEntries = 64;
+
+  final Map<String, List<GeocodeResult>> _cache = {};
+
   /// Haetaan vain osoitteita ja paikannimiä. Kiinteistötunnukset ja
   /// karttalehdet jätetään pois — ne eivät auta invapaikan etsijää.
   static const String _sources =
@@ -68,11 +92,22 @@ class MmlGeocoder {
     int limit = 8,
   }) async {
     final text = query.trim();
-    if (text.isEmpty) return const [];
+    if (text.length < minQueryLength) return const [];
     if (apiKey.isEmpty) {
       throw const GeocoderException(
         'Haku osoitteella vaatii API-avaimen. Lisää se asetuksista.',
       );
+    }
+
+    // Pelias ei erottele kirjainkokoa, joten "Hämeenkatu" ja "hämeenkatu"
+    // ovat välimuistin kannalta sama haku.
+    final cacheKey = '${text.toLowerCase()}|$limit';
+    final cached = _cache.remove(cacheKey);
+    if (cached != null) {
+      // Uudelleen lisäys siirtää osuman jonon perälle, jolloin poistuvaksi
+      // valikoituu aina pisimpään koskematta ollut.
+      _cache[cacheKey] = cached;
+      return cached;
     }
 
     final uri = Uri.parse(_baseUrl).replace(queryParameters: {
@@ -141,7 +176,11 @@ class MmlGeocoder {
         ),
       );
     }
-    return results;
+
+    final stored = List<GeocodeResult>.unmodifiable(results);
+    if (_cache.length >= maxCacheEntries) _cache.remove(_cache.keys.first);
+    _cache[cacheKey] = stored;
+    return stored;
   }
 
   void dispose() => _client.close();

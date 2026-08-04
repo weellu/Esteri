@@ -177,12 +177,20 @@ void main() {
     });
 
     test('nimettömät osumat ohitetaan', () async {
+      var called = false;
       final geocoder = MmlGeocoder(
-        client: MockClient((_) async => jsonResponse(
-                featureCollection([feature(23.7610, 61.4978, label: null)]))),
+        client: MockClient((_) async {
+          called = true;
+          return jsonResponse(
+              featureCollection([feature(23.7610, 61.4978, label: null)]));
+        }),
       );
 
-      expect(await geocoder.search('x', apiKey: 'avain'), isEmpty);
+      // Hakusanan on ylitettävä minQueryLength, muuten tämä menisi läpi
+      // siksi ettei hakua tehdä lainkaan — ei siksi että nimetön osuma
+      // ohitetaan.
+      expect(await geocoder.search('xy', apiKey: 'avain'), isEmpty);
+      expect(called, isTrue);
     });
 
     test('ääkköset säilyvät vastauksessa', () async {
@@ -193,6 +201,161 @@ void main() {
 
       final results = await geocoder.search('Pyynikki', apiKey: 'avain');
       expect(results.single.label, 'Pyynikintörmä');
+    });
+  });
+
+  group('MmlGeocoder — turha liikenne', () {
+    test('yhden merkin haku ei mene verkkoon', () async {
+      var called = false;
+      final geocoder = MmlGeocoder(
+        client: MockClient((_) async {
+          called = true;
+          return jsonResponse(featureCollection([]));
+        }),
+      );
+
+      expect(await geocoder.search('H', apiKey: 'avain'), isEmpty);
+      expect(called, isFalse);
+    });
+
+    test('kahden merkin kunta haetaan silti', () async {
+      var called = false;
+      final geocoder = MmlGeocoder(
+        client: MockClient((_) async {
+          called = true;
+          return jsonResponse(featureCollection(
+              [feature(25.3833, 65.3167, label: 'Ii')]));
+        }),
+      );
+
+      // Ii on kunta. Jos minimipituus nostetaan kolmeen, se muuttuu
+      // hakukelvottomaksi ja tämä testi kaatuu — tarkoituksella.
+      final results = await geocoder.search('Ii', apiKey: 'avain');
+
+      expect(called, isTrue);
+      expect(results.single.label, 'Ii');
+    });
+
+    test('sama haku haetaan verkosta vain kerran', () async {
+      var calls = 0;
+      final geocoder = MmlGeocoder(
+        client: MockClient((_) async {
+          calls++;
+          return jsonResponse(
+              featureCollection([feature(23.7610, 61.4978)]));
+        }),
+      );
+
+      final first = await geocoder.search('Hämeenkatu', apiKey: 'avain');
+      final second = await geocoder.search('Hämeenkatu', apiKey: 'avain');
+
+      expect(calls, 1);
+      expect(second.single.label, first.single.label);
+    });
+
+    test('kirjainkoko ei ohita välimuistia', () async {
+      var calls = 0;
+      final geocoder = MmlGeocoder(
+        client: MockClient((_) async {
+          calls++;
+          return jsonResponse(
+              featureCollection([feature(23.7610, 61.4978)]));
+        }),
+      );
+
+      await geocoder.search('Hämeenkatu', apiKey: 'avain');
+      await geocoder.search('hämeenkatu', apiKey: 'avain');
+
+      expect(calls, 1);
+    });
+
+    test('eri tulosmäärä on eri haku', () async {
+      var calls = 0;
+      final geocoder = MmlGeocoder(
+        client: MockClient((_) async {
+          calls++;
+          return jsonResponse(
+              featureCollection([feature(23.7610, 61.4978)]));
+        }),
+      );
+
+      await geocoder.search('Hämeenkatu', apiKey: 'avain', limit: 3);
+      await geocoder.search('Hämeenkatu', apiKey: 'avain', limit: 6);
+
+      expect(calls, 2);
+    });
+
+    test('tyhjä tulos välimuistitetaan sekin', () async {
+      var calls = 0;
+      final geocoder = MmlGeocoder(
+        client: MockClient((_) async {
+          calls++;
+          return jsonResponse(featureCollection([]));
+        }),
+      );
+
+      // "Ei löytynyt mitään" on yhtä pätevä vastaus kuin osuma, eikä sen
+      // toistaminen tuota uutta tietoa.
+      await geocoder.search('Ei tällaista', apiKey: 'avain');
+      await geocoder.search('Ei tällaista', apiKey: 'avain');
+
+      expect(calls, 1);
+    });
+
+    test('virhettä ei jätetä välimuistiin', () async {
+      var calls = 0;
+      final geocoder = MmlGeocoder(
+        client: MockClient((_) async {
+          calls++;
+          if (calls == 1) return jsonResponse('hajalla', 500);
+          return jsonResponse(
+              featureCollection([feature(23.7610, 61.4978)]));
+        }),
+      );
+
+      await expectLater(
+        () => geocoder.search('Hämeenkatu', apiKey: 'avain'),
+        throwsA(isA<GeocoderException>()),
+      );
+      final retry = await geocoder.search('Hämeenkatu', apiKey: 'avain');
+
+      // Verkkokatkos on ohimenevä. Jos se jäisi välimuistiin, haku pysyisi
+      // rikki sovelluksen uudelleenkäynnistykseen asti.
+      expect(calls, 2);
+      expect(retry, hasLength(1));
+    });
+
+    test('välimuisti ei kasva rajatta', () async {
+      var calls = 0;
+      final geocoder = MmlGeocoder(
+        client: MockClient((_) async {
+          calls++;
+          return jsonResponse(
+              featureCollection([feature(23.7610, 61.4978)]));
+        }),
+      );
+
+      await geocoder.search('ensimmäinen', apiKey: 'avain');
+      for (var i = 0; i < MmlGeocoder.maxCacheEntries; i++) {
+        await geocoder.search('täyte $i', apiKey: 'avain');
+      }
+      final callsBefore = calls;
+
+      // Vanhin on pudonnut pois, joten sama haku menee taas verkkoon.
+      await geocoder.search('ensimmäinen', apiKey: 'avain');
+
+      expect(calls, callsBefore + 1);
+    });
+
+    test('tuloslistaa ei voi muuttaa välimuistin alta', () async {
+      final geocoder = MmlGeocoder(
+        client: MockClient((_) async => jsonResponse(
+            featureCollection([feature(23.7610, 61.4978)]))),
+      );
+
+      final results = await geocoder.search('Hämeenkatu', apiKey: 'avain');
+
+      expect(() => results.clear(), throwsUnsupportedError);
     });
   });
 }
