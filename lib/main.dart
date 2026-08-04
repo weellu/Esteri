@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:http_cache_core/http_cache_core.dart';
 
 import 'config.dart';
 import 'data/spot_data_source.dart';
 import 'services/contribution_service.dart';
 import 'services/data_updater.dart';
 import 'services/map_key_store.dart';
+import 'services/tile_cache.dart';
 import 'ui/map_screen.dart';
 import 'ui/spot_marker.dart';
 
@@ -52,6 +54,7 @@ class _EsteriAppState extends State<EsteriApp> {
             dataSource: services.dataSource,
             updater: services.updater,
             contributions: services.contributions,
+            tileCache: services.tileCache,
           );
         },
       ),
@@ -60,7 +63,13 @@ class _EsteriAppState extends State<EsteriApp> {
 }
 
 class AppServices {
-  AppServices(this.dataSource, this.keyStore, this.updater, this.contributions);
+  AppServices(
+    this.dataSource,
+    this.keyStore,
+    this.updater,
+    this.contributions,
+    this.tileCache,
+  );
 
   final SpotDataSource dataSource;
   final MapKeyStore keyStore;
@@ -70,11 +79,15 @@ class AppServices {
   /// ilmoitustoiminnot jäävät pois käyttöliittymästä kokonaan.
   final ContributionService? contributions;
 
+  /// Null, jos välimuistihakemistoa ei saatu auki. Kartta toimii silti.
+  final CacheStore? tileCache;
+
   static Future<AppServices> create() async {
     // Aineiston asennus ja avaimen lataus ovat riippumattomia, joten
     // ne tehdään rinnakkain.
     final dataSource = SpotDataSource.open();
     final keyStore = MapKeyStore.load();
+    final tileCache = TileCache.open();
     final contributions = Config.contributionsEnabled
         ? ContributionService.load()
         : null;
@@ -83,6 +96,7 @@ class AppServices {
       await keyStore,
       DataUpdater(),
       await contributions,
+      await tileCache,
     );
 
     // Päivitystä ei odoteta: kartta avautuu heti mukana tulleella tai

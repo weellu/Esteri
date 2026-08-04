@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http_cache_core/http_cache_core.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:esteri/config.dart';
 import 'package:esteri/services/geocoder.dart';
@@ -17,6 +19,7 @@ Future<void> pumpMap(
   MapKeyStore store, {
   MmlGeocoder? geocoder,
   LocationService? locationService,
+  CacheStore? tileCache,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -25,6 +28,7 @@ Future<void> pumpMap(
         keyStore: store,
         geocoder: geocoder ?? fakeGeocoder(),
         locationService: locationService,
+        tileCache: tileCache,
       ),
     ),
   );
@@ -339,6 +343,38 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(location.cancellations, 1);
+    });
+  });
+
+  group('tiilien levyvälimuisti', () {
+    testWidgets('otetaan käyttöön kun se on annettu', (tester) async {
+      await pumpMap(
+        tester,
+        FakeSpotRepository([]),
+        await fakeKeyStore(key: 'avain'),
+        tileCache: MemCacheStore(),
+      );
+
+      final layer = tester.widget<TileLayer>(find.byType(TileLayer));
+
+      // Ilman tätä kartta lataisi samat tiilet uudelleen joka käynnistyksellä.
+      // Kytkentä on yksi valinnainen parametri, joten se on myös helppo
+      // pudottaa vahingossa pois — siksi tästä on testi.
+      expect(layer.tileProvider, isA<CachedTileProvider>());
+    });
+
+    testWidgets('kartta toimii myös ilman välimuistia', (tester) async {
+      await pumpMap(
+        tester,
+        FakeSpotRepository([]),
+        await fakeKeyStore(key: 'avain'),
+      );
+
+      final layer = tester.widget<TileLayer>(find.byType(TileLayer));
+
+      // Välimuisti on nopeutus, ei ehto. Jos hakemistoa ei saada auki,
+      // tiilet haetaan verkosta kuten ennenkin.
+      expect(layer.tileProvider, isNot(isA<CachedTileProvider>()));
     });
   });
 }

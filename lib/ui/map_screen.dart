@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
+import 'package:http_cache_core/http_cache_core.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../config.dart';
@@ -14,6 +16,7 @@ import '../services/data_updater.dart';
 import '../services/geocoder.dart';
 import '../services/location_service.dart';
 import '../services/map_key_store.dart';
+import '../services/tile_cache.dart';
 import 'settings_screen.dart';
 import 'add_spot_sheet.dart';
 import 'attribution_bar.dart';
@@ -38,10 +41,15 @@ class MapScreen extends StatefulWidget {
     this.dataSource,
     this.updater,
     this.contributions,
+    this.tileCache,
   });
 
   final SpotRepository database;
   final MapKeyStore keyStore;
+
+  /// Karttatiilien levyvälimuisti. Null, kun sitä ei saatu auki tai kun
+  /// testi ei tarvitse sitä — kartta hakee tiilet silloin suoraan verkosta.
+  final CacheStore? tileCache;
 
   /// Käyttäjien ilmoitusten lähetys. Kun tämä puuttuu tai taustapalvelua ei
   /// ole määritetty, vahvistus- ja lisäystoiminnot jäävät kokonaan pois
@@ -387,6 +395,12 @@ class _MapScreenState extends State<MapScreen> {
                       urlTemplate: Config.mmlTileUrl(widget.keyStore.key),
                       userAgentPackageName: Config.userAgentPackageName,
                       maxNativeZoom: 18,
+                      tileProvider: widget.tileCache == null
+                          ? null
+                          : CachedTileProvider(
+                              store: widget.tileCache!,
+                              maxStale: TileCache.maxStale,
+                            ),
                     ),
                   if (_userPosition != null)
                     CircleLayer(
