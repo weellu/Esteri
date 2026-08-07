@@ -1,5 +1,49 @@
 {
-  "generated_at": "2026-08-04T13:20:08+00:00",
-  "high_water_mark": 4,
-  "signals": {}
+  "generated_at": "2026-08-07T05:41:06+00:00",
+  "high_water_mark": 17,
+  "signals": {
+    "osm:way/1215392176": {
+      "last": "2026-08-06",
+      "missing": 0,
+      "present": 1
+    },
+    "osm:way/1215392177": {
+      "last": "2026-08-06",
+      "missing": 0,
+      "present": 1
+    },
+    "osm:way/1215392178": {
+      "last": "2026-08-06",
+      "missing": 0,
+      "present": 1
+    },
+    "osm:way/1215392179": {
+      "last": "2026-08-06",
+      "missing": 0,
+      "present": 1
+    },
+    "osm:way/1215392180": {
+      "last": "2026-08-06",
+      "missing": 0,
+      "present": 1
+    },
+    "osm:way/1215392181": {
+      "last": "2026-08-06",
+      "missing": 0,
+      "present": 1
+    },
+    "osm:way/1215392182": {
+      "last": "2026-08-06",
+      "missing": 0,
+      "present": 1
+    },
+    "osm:way/42489540": {
+      "capacities": [
+        4
+      ],
+      "last": "2026-08-04",
+      "missing": 0,
+      "present": 1
+    }
+  }
 }

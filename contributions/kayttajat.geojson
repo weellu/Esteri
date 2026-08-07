@@ -38,11 +38,87 @@
      1
     ]
    }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     23.8682311,
+     61.4730009
+    ]
+   },
+   "properties": {
+    "id": "u00003",
+    "reports": 1,
+    "first_seen": "2026-08-04",
+    "last_seen": "2026-08-04",
+    "capacities": [
+     1
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     24.8560892,
+     60.2712576
+    ]
+   },
+   "properties": {
+    "id": "u00004",
+    "reports": 1,
+    "first_seen": "2026-08-05",
+    "last_seen": "2026-08-05",
+    "capacities": [
+     2
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     23.7834461,
+     61.4767011
+    ]
+   },
+   "properties": {
+    "id": "u00005",
+    "reports": 1,
+    "first_seen": "2026-08-06",
+    "last_seen": "2026-08-06",
+    "capacities": [
+     1
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     23.777091,
+     61.4856809
+    ]
+   },
+   "properties": {
+    "id": "u00006",
+    "reports": 1,
+    "first_seen": "2026-08-06",
+    "last_seen": "2026-08-06",
+    "capacities": [
+     1
+    ]
+   }
   }
  ],
  "metadata": {
   "kuvaus": "Käyttäjien ilmoittamat invapaikat. Moderoitu PR-katselmoinnissa.",
   "license": "ODbL-1.0",
-  "count": 2
+  "count": 6
  }
 }
